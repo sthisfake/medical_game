@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="360" viewBox="0 0 300 360">
+  <!-- تصویر نمونهٔ «نقشهٔ عضلات صورت» — فقط برای نمایش مکانیک بازی است.
+       عکس‌های واقعی بعداً جایگزین می‌شوند. خط‌چین‌های کمرنگ = نواحی قابل کلیک -->
+  <rect width="300" height="360" fill="#fbf7f2" rx="24" />
+
+  <!-- گردن -->
+  <rect x="126" y="284" width="48" height="52" rx="18" fill="#f0d9c6" />
+  <!-- گوش‌ها -->
+  <ellipse cx="53" cy="176" rx="13" ry="25" fill="#f2dcc9" stroke="#d8b799" stroke-width="2" />
+  <ellipse cx="247" cy="176" rx="13" ry="25" fill="#f2dcc9" stroke="#d8b799" stroke-width="2" />
+  <!-- سر -->
+  <ellipse cx="150" cy="168" rx="102" ry="130" fill="#f2dcc9" stroke="#d8b799" stroke-width="3" />
+
+  <!-- ابروها -->
+  <path d="M90 125 Q110 115 130 124" fill="none" stroke="#7a5644" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M170 124 Q190 115 210 125" fill="none" stroke="#7a5644" stroke-width="3.5" stroke-linecap="round" />
+  <!-- چشم‌ها -->
+  <ellipse cx="110" cy="143" rx="15" ry="9.5" fill="#fffdfa" stroke="#8a6a55" stroke-width="1.6" />
+  <circle cx="110" cy="143" r="4.2" fill="#4a362c" />
+  <ellipse cx="190" cy="143" rx="15" ry="9.5" fill="#fffdfa" stroke="#8a6a55" stroke-width="1.6" />
+  <circle cx="190" cy="143" r="4.2" fill="#4a362c" />
+
+  <!-- بینی -->
+  <path d="M150 138 L145 169 Q150 178 155 169 Z" fill="#e6bd9b" opacity="0.85" />
+  <!-- دهان -->
+  <path d="M113 222 Q132 213 150 221 Q168 213 187 222 Q168 242 150 238 Q132 242 113 222 Z" fill="#b9756f" stroke="#9c5f5a" stroke-width="1.5" />
+
+  <!-- خط‌چین راهنمای نواحی (هم‌مختصات با هات‌اسپات‌های فایل داده) -->
+  <g fill="none" stroke="#c2a68e" stroke-width="1.6" stroke-dasharray="4 3.5" opacity="0.75">
+    <!-- فرونتالیس (پیشانی) -->
+    <ellipse cx="150" cy="82" rx="80" ry="32" />
+    <!-- اوربیکولاریس اوکولی راست و چپ -->
+    <ellipse cx="110" cy="142" rx="21" ry="14" />
+    <ellipse cx="190" cy="142" rx="21" ry="14" />
+    <!-- زیگوماتیکوس چپ/راست -->
+    <g transform="translate(100 196) rotate(14)">
+      <ellipse cx="0" cy="0" rx="26" ry="16" />
+    </g>
+    <g transform="translate(200 196) rotate(-14)">
+      <ellipse cx="0" cy="0" rx="26" ry="16" />
+    </g>
+    <!-- ماسِتر چپ/راست -->
+    <g transform="translate(86 254) rotate(6)">
+      <ellipse cx="0" cy="0" rx="22" ry="38" />
+    </g>
+    <g transform="translate(214 254) rotate(-6)">
+      <ellipse cx="0" cy="0" rx="22" ry="38" />
+    </g>
+    <!-- اوربیکولاریس اوریس (دور دهان) -->
+    <ellipse cx="150" cy="226" rx="40" ry="24" />
+  </g>
+</svg>

@@ -1,0 +1,23 @@
+# dependencies & build
+node_modules/
+.next/
+dist/
+.npm-cache/
+
+# runtime data (sqlite db — only used when DATABASE_URL is unset)
+data/
+public/uploads/
+
+# secrets
+.env
+.env*.local
+
+# editor / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# client reference images (not part of the app)
+client-brief/
+*.tsbuildinfo
