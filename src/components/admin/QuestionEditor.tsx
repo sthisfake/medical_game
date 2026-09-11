@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '../../lib/api'
 import { toFa } from '../../lib/format'
+import { prepareImageForUpload } from '../../lib/image-resize'
 import type { AnswerZone, Question, QuestionInput, QuestionType, Stage } from '../../types'
 import { AdminShell } from './AdminShell'
 import { ZoneCanvas } from './ZoneCanvas'
@@ -50,10 +51,14 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
   const [options, setOptions] = useState<string[]>(['', '', '', ''])
   const [correctIndex, setCorrectIndex] = useState(-1)
   const [videoUrl, setVideoUrl] = useState('')
+  const [repoVideos, setRepoVideos] = useState<string[]>([])
 
   const [busy, setBusy] = useState(false)
+  const [videoBusy, setVideoBusy] = useState(false)
+  const [uploadNote, setUploadNote] = useState('')
   const [message, setMessage] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const videoFileRef = useRef<HTMLInputElement>(null)
 
   const loadStages = useCallback(async () => {
     try {
@@ -64,9 +69,23 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
     }
   }, [])
 
+  const loadRepoVideos = useCallback(async () => {
+    try {
+      const d = await api<{ videos: Array<{ name: string }> }>('/api/videos')
+      setRepoVideos((d.videos ?? []).map((v) => v.name))
+    } catch {
+      setRepoVideos([])
+    }
+  }, [])
+
   useEffect(() => {
     void loadStages()
   }, [loadStages])
+
+  // فهرست ویدیوهای داخل پوشهٔ پروژه (public/videos)
+  useEffect(() => {
+    void loadRepoVideos()
+  }, [loadRepoVideos])
 
   useEffect(() => {
     if (!questionId) return
@@ -102,9 +121,13 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
   const upload = async (file: File) => {
     setBusy(true)
     setMessage('')
+    setUploadNote('')
     try {
+      // فشرده‌سازی و کوچک‌سازی در مرورگر پیش از آپلود (سقف درخواست Vercel ≈ ۴.۵MB)
+      const prepared = await prepareImageForUpload(file)
+      setUploadNote(prepared.note)
       const fd = new FormData()
-      fd.append('file', file)
+      fd.append('file', prepared.blob, prepared.fileName)
       const data = await api<UploadResponse>('/api/upload', { method: 'POST', body: fd })
       applyUploadedImage(data.path)
     } catch (e) {
@@ -117,6 +140,24 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
 
   const setOption = (i: number, value: string) =>
     setOptions((o) => o.map((v, j) => (j === i ? value : v)))
+
+  /** آپلود ویدیو به پوشهٔ پروژه (public/videos) — فقط در اجرای محلی */
+  const uploadVideo = async (file: File) => {
+    setVideoBusy(true)
+    setMessage('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const data = await api<{ url: string }>('/api/videos', { method: 'POST', body: fd })
+      setVideoUrl(data.url)
+      await loadRepoVideos()
+    } catch (e) {
+      setMessage(String(e))
+    } finally {
+      setVideoBusy(false)
+      if (videoFileRef.current) videoFileRef.current.value = ''
+    }
+  }
 
   const addOption = () => {
     if (options.length < 4) setOptions((o) => [...o, ''])
@@ -275,6 +316,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
                   </span>
                 )}
               </div>
+              {uploadNote && <p className="upload-row__note">{uploadNote}</p>}
               {type === 'mcq' && (
                 <p className="zone-editor__hint">
                   تصویر فقط نمایش داده می‌شود و قابل کلیک نیست؛ پاسخ با انتخاب گزینه داده می‌شود.
@@ -328,13 +370,56 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
               {type === 'video' && (
                 <div className="admin-card">
                   <h2 className="zone-title">ویدیوی سؤال</h2>
+
+                  <div className="field">
+                    <span>افزودن ویدیو به پوشهٔ پروژه (در اجرای محلی)</span>
+                    <div className="upload-row">
+                      <input
+                        ref={videoFileRef}
+                        type="file"
+                        accept="video/mp4,video/webm,video/quicktime"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (f) void uploadVideo(f)
+                        }}
+                      />
+                      {videoBusy && <span className="upload-row__busy">در حال آپلود…</span>}
+                    </div>
+                    <p className="zone-editor__hint">
+                      فایل در <code>public/videos</code> ذخیره می‌شود؛ برای اجرا روی Vercel همان فایل‌ها را
+                      commit و push کنید.
+                    </p>
+                  </div>
+
+                  {repoVideos.length > 0 && (
+                    <div className="field">
+                      <span>انتخاب از پوشهٔ پروژه (public/videos)</span>
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) setVideoUrl(`/videos/${e.target.value}`)
+                        }}
+                      >
+                        <option value="">— انتخاب ویدیو —</option>
+                        {repoVideos.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="zone-editor__hint">
+                        ویدیوهای این پوشه همراه برنامه روی Vercel هم استقرار می‌یابند.
+                      </p>
+                    </div>
+                  )}
+
                   <label className="field">
-                    <span>آدرس ویدیو * (mp4/webm یا لینک YouTube)</span>
+                    <span>یا آدرس ویدیو (فایل پروژه / آدرس مستقیم / لینک YouTube)</span>
                     <input
                       dir="ltr"
                       value={videoUrl}
                       onChange={(e) => setVideoUrl(e.target.value)}
-                      placeholder="https://example.com/video.mp4"
+                      placeholder="/videos/video1.mp4 یا https://youtu.be/…"
                     />
                   </label>
                   {videoUrl && (

@@ -6,9 +6,15 @@ const results = []
 
 const check = (name, ok) => results.push([name, ok])
 
+// اعتبارنامهٔ پنل مدیریت (پیش‌فرض admin/admin — قابل تغییر با متغیرهای محیطی)
+const ADMIN_USER = process.env.ADMIN_USER ?? 'admin'
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'admin'
+const authHeader = `Basic ${Buffer.from(`${ADMIN_USER}:${ADMIN_PASSWORD}`).toString('base64')}`
+
 async function json(url, init) {
   const headers = new Headers(init?.headers)
   if (init?.body) headers.set('Content-Type', 'application/json')
+  if (init?.method && init.method !== 'GET') headers.set('Authorization', authHeader)
   const res = await fetch(base + url, { ...init, headers, redirect: 'follow' })
   const text = await res.text()
   let data
@@ -18,18 +24,44 @@ async function json(url, init) {
 }
 
 try {
-  // 1) دادهٔ نمونه (seed)
+  // 0) محافظت از پنل مدیریت و تغییرات داده
+  const adminNoAuth = await fetch(base + '/admin', { redirect: 'manual' })
+  check('admin page requires auth (401)', adminNoAuth.status === 401)
+  const adminWithAuth = await fetch(base + '/admin', { headers: { Authorization: authHeader } })
+  check('admin page opens with auth (200)', adminWithAuth.status === 200)
+  const writeNoAuth = await fetch(base + '/api/stages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: 'smoke-unauthorized' }),
+  })
+  check('write API blocked without auth (401)', writeNoAuth.status === 401)
+  const readPublic = await fetch(base + '/api/stages')
+  check('read API stays public (200)', readPublic.status === 200)
+
+  // 1) ساختار دادهٔ موجود (ممکن است محتوای واقعی جای دادهٔ نمونه را گرفته باشد)
   const all = await json('/api/stages')
   const stage1 = all.stages.find((s) => s.id === 1)
   check('seeded: 4 stages', all.stages.length === 4)
   check(
-    'stage 1 has 7 demo questions with zones',
-    !!stage1 && stage1.questions.length === 7 && stage1.questions[0].zones.length > 0,
+    'stage 1 has questions with zones',
+    !!stage1 && stage1.questions.length > 0 && stage1.questions.some((q) => q.zones.length > 0),
   )
-  const mcqDemo = stage1?.questions.find((q) => q.type === 'mcq')
-  const vidDemo = stage1?.questions.find((q) => q.type === 'video')
-  check('demo has mcq question', !!mcqDemo && mcqDemo.correctIndex >= 0 && mcqDemo.options.length >= 3)
-  check('demo has video question', !!vidDemo && !!vidDemo.videoUrl && vidDemo.options.length >= 3)
+  const existing = all.stages.flatMap((s) => s.questions)
+  const mcqQ = existing.find((q) => q.type === 'mcq')
+  const vidQ = existing.find((q) => q.type === 'video')
+  check(
+    'existing mcq questions are well-formed',
+    !mcqQ || (mcqQ.correctIndex >= 0 && mcqQ.options.length >= 3),
+  )
+  check(
+    'existing video questions are well-formed',
+    !vidQ || (!!vidQ.videoUrl && vidQ.options.length >= 3),
+  )
+  console.log(
+    `— محتوا: ${all.stages.length} مرحله، ${existing.length} سؤال ` +
+      `(mcq: ${existing.filter((q) => q.type === 'mcq').length}، ` +
+      `video: ${existing.filter((q) => q.type === 'video').length})`,
+  )
 
   // 2) آپلود تصویر (multipart)
   const png = Buffer.from(
@@ -38,7 +70,11 @@ try {
   )
   const fd = new FormData()
   fd.append('file', new Blob([png], { type: 'image/png' }), 'smoke.png')
-  const upRes = await fetch(base + '/api/upload', { method: 'POST', body: fd })
+  const upRes = await fetch(base + '/api/upload', {
+    method: 'POST',
+    body: fd,
+    headers: { Authorization: authHeader },
+  })
   const up = await upRes.json()
   check('upload image', upRes.status === 200 && up.ok === true && /^\/api\/uploads\/\d+$/.test(up.path))
 

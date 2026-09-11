@@ -32,11 +32,32 @@
   --r-sm: 10px;
   --shadow: 0 1px 2px rgba(22, 33, 48, 0.04), 0 6px 18px rgba(22, 33, 48, 0.05);
 
+  /* سقف ارتفاع تصویر سؤال — تا تصویر و گزینه‌ها با هم در صفحهٔ گوشی جا شوند */
+  --image-max-h: 64vh;
+  --image-max-h: 64dvh;
+
   font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* لمس تمیزتر: بدون هایلایت آبی و بدون تأخیر دوبار-لمس */
+button,
+a,
+input,
+select,
+.option,
+.anatomy {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* بازخورد فوری لمس (پیش از رهاکردن انگشت) */
+.btn:active:not(:disabled),
+.option:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 html {
@@ -206,25 +227,11 @@ a:hover {
   margin-bottom: 2rem;
 }
 
-.hero__kicker {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 0.5rem;
-}
-
 .hero__title {
   font-size: clamp(1.9rem, 5.5vw, 2.9rem);
   font-weight: 800;
   line-height: 1.5;
-}
-
-.hero__lead {
-  max-width: 620px;
-  margin: 0.85rem auto 1.9rem;
-  color: var(--ink-2);
-  font-size: 1rem;
-  line-height: 2.1;
+  margin-bottom: 1.5rem;
 }
 
 .hero__note {
@@ -367,68 +374,12 @@ a:hover {
   border-style: dashed;
 }
 
-/* ---------------- راهنمای آزمون ---------------- */
-
-.rules {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 2rem;
-}
-
-.rule {
-  display: flex;
-  gap: 1.1rem;
-  align-items: flex-start;
-  padding: 0.85rem 0.25rem;
-  border-bottom: 1px solid var(--line);
-}
-
-.rule:last-child {
-  border-bottom: 0;
-}
-
-.rule__idx {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  margin-top: 0.15rem;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--ink-2);
-}
-
-.rule b {
-  display: block;
-  font-size: 0.95rem;
-  line-height: 1.9;
-}
-
-.rule p {
-  color: var(--ink-2);
-  font-size: 0.87rem;
-  line-height: 2;
-}
-
 /* ---------------- پانوشت صفحهٔ شروع ---------------- */
 
 .start-footer {
   text-align: center;
   color: var(--ink-3);
   font-size: 0.82rem;
-}
-
-.start-footer__sep {
-  margin: 0 0.7rem;
-  color: var(--line-strong);
-}
-
-.start-footer__admin {
-  color: var(--accent);
-  font-weight: 600;
 }
 
 /* ---------------- نوار بالای سؤال ---------------- */
@@ -573,6 +524,9 @@ a:hover {
 
 .anatomy {
   position: relative;
+  /* جعبه دقیقاً هم‌نسبت تصویر است (aspect-ratio در JSX ست می‌شود) تا نگاشت کلیک و
+     لایهٔ ناحیه‌ها روی هر اندازهٔ صفحه دقیق بماند */
+  margin-inline: auto;
   border-radius: calc(var(--r-sm) - 3px);
   overflow: hidden;
   cursor: crosshair;
@@ -584,20 +538,53 @@ a:hover {
 .anatomy img {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   border-radius: calc(var(--r-sm) - 3px);
   pointer-events: none;
+}
+
+/* اگر ابعاد تصویر نامعلوم باشد: جعبه به اندازهٔ طبیعی تصویر جمع می‌شود */
+.anatomy--auto {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.anatomy--auto img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--image-max-h);
+}
+
+/* جعبهٔ تصویر نمایشی سؤال چهارگزینه‌ای (هم‌نسبت، بدون اعوجاج) */
+.imgbox {
+  width: 100%;
+  margin-inline: auto;
+  border-radius: calc(var(--r-sm) - 3px);
+  overflow: hidden;
+}
+
+.imgbox--auto {
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* تصویر نمایشی سؤال چهارگزینه‌ای (غیرقابل کلیک) */
 .question__img {
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   border-radius: calc(var(--r-sm) - 3px);
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.imgbox--auto .question__img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--image-max-h);
 }
 
 .anatomy--locked {
@@ -1406,6 +1393,19 @@ a:hover {
   white-space: nowrap;
 }
 
+.upload-row__note {
+  margin: 0.4rem 0 0;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+
+.zone-editor__hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
 .editor__actions {
   display: flex;
   gap: 0.6rem;
@@ -1756,7 +1756,175 @@ a:hover {
 
 /* ---------------- ریسپانسیو ---------------- */
 
+/* ---------------- گوشی: چیدمان جمع‌وجور و لمس‌پذیر ---------------- */
 @media (max-width: 700px) {
+  :root {
+    /* تصویر سؤال کوتاه‌تر می‌شود تا گزینه‌ها هم در دید باشند */
+    --image-max-h: 44vh;
+    --image-max-h: 44dvh;
+  }
+
+  .screen {
+    padding: 0.9rem 1rem 3rem;
+  }
+
+  .screen--start {
+    padding-top: 1.25rem;
+  }
+
+  .screen--play {
+    padding-top: 0.4rem;
+    padding-bottom: calc(128px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* --- نوار بالای سؤال: فشرده، ثابت و در دسترس --- */
+  .playbar {
+    top: 6px;
+    gap: 0.45rem;
+    padding: 0.3rem 0.35rem 0.3rem 0.4rem;
+  }
+
+  .playbar__exit {
+    height: 34px !important;
+    padding: 0 0.7rem !important;
+    font-size: 0.78rem !important;
+  }
+
+  .playbar__title {
+    font-size: 0.78rem;
+  }
+
+  .timer {
+    width: 38px;
+    height: 38px;
+  }
+
+  /* --- متن سؤال --- */
+  .question__meta {
+    gap: 0.35rem;
+  }
+
+  .pill {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.6rem;
+  }
+
+  .question__prompt {
+    font-size: 1.02rem;
+    line-height: 1.85;
+    padding-bottom: 0.8rem;
+  }
+
+  .question__image,
+  .question__options,
+  .question__video {
+    margin-bottom: 0.9rem;
+  }
+
+  .question__image {
+    padding: 6px;
+  }
+
+  /* --- گزینه‌ها: تمام‌عرض با ارتفاع راحت انگشت --- */
+  .options {
+    gap: 0.5rem;
+  }
+
+  .option {
+    min-height: 58px;
+    gap: 0.7rem;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.95rem;
+  }
+
+  .option__key {
+    width: 28px;
+    height: 28px;
+    font-size: 0.8rem;
+  }
+
+  /* --- بازخورد و دکمهٔ ادامه --- */
+  .feedback__hint {
+    font-size: 0.82rem;
+  }
+
+  .feedback__banner {
+    font-size: 0.88rem;
+  }
+
+  .feedback__actions {
+    gap: 0.5rem;
+  }
+
+  .feedback__actions .btn {
+    width: 100%;
+    height: 50px;
+  }
+
+  .explain {
+    padding: 0.9rem 1rem;
+  }
+
+  /* --- نوار پایین: نصف ارتفاع قبلی --- */
+  .scorebar {
+    padding: 0.5rem 1rem 0.45rem;
+  }
+
+  .scorebar__top {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .scorebar__stage,
+  .scorebar__q {
+    font-size: 0.76rem;
+  }
+
+  .scorebar__cells {
+    justify-content: space-between;
+  }
+
+  .cell {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    padding: 0 0.7rem;
+    border-inline-start: 0;
+  }
+
+  .cell:first-child {
+    padding-inline-start: 0;
+  }
+
+  .cell b {
+    font-size: 1.05rem;
+  }
+
+  .cell span {
+    font-size: 0.68rem;
+    line-height: 1.5;
+  }
+
+  .scorebar__track {
+    margin-top: 0.35rem;
+  }
+
+  /* --- صفحهٔ شروع --- */
+  .hero {
+    padding: 1.6rem 1.1rem;
+  }
+
+  .hero .btn--lg {
+    width: 100%;
+  }
+
+  .section-title {
+    font-size: 1rem;
+  }
+
   .stage-row {
     flex-wrap: wrap;
     gap: 0.6rem 1rem;
@@ -1770,27 +1938,17 @@ a:hover {
     padding-inline-start: 52px;
   }
 
-  .scorebar__top {
-    align-items: flex-start;
+  /* --- صفحه‌های نتیجه --- */
+  .result__actions {
     flex-direction: column;
-    gap: 0.15rem;
+    gap: 0.5rem;
   }
 
-  .scorebar__cells {
-    justify-content: space-between;
-  }
-
-  .cell {
-    flex-direction: column;
-    gap: 0;
-    padding: 0.25rem 0.85rem;
-    border-inline-start: 0;
-  }
-
-  .feedback__actions .btn {
+  .result__actions .btn {
     width: 100%;
   }
 
+  /* --- پنل مدیریت --- */
   .editor {
     grid-template-columns: 1fr;
   }
@@ -1812,6 +1970,28 @@ a:hover {
 
   .admin__back {
     justify-self: start;
+  }
+}
+
+/* گوشی در حالت افقی: ارتفاع کم است، تصویر هم کوتاه‌تر می‌شود */
+@media (max-height: 520px) and (orientation: landscape) {
+  :root {
+    --image-max-h: 52vh;
+    --image-max-h: 52dvh;
+  }
+
+  .screen--play {
+    padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ارتفاع واقعی صفحهٔ مرورگر موبایل (جلوگیری از پرش نوار آدرس) */
+
+@supports (height: 100dvh) {
+  body,
+  .screen--result,
+  .admin {
+    min-height: 100dvh;
   }
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CONFIG } from '../config'
 import { pointInZoneAt } from '../lib/geo'
 import type { Pt } from '../lib/geo'
@@ -48,6 +48,7 @@ export function QuestionScreen({
   const [correctMarkers, setCorrectMarkers] = useState<Pt[]>([])
   const [blankNotice, setBlankNotice] = useState(false)
   const [chosen, setChosen] = useState<number | null>(null)
+  const feedbackRef = useRef<HTMLDivElement>(null)
   const qKey = `${stage.id}:${questionIndex}:${question.id}`
 
   const correctZones = question.zones.filter((z) => z.correct !== false).length
@@ -73,6 +74,17 @@ export function QuestionScreen({
   useEffect(() => {
     if (open && remaining === 0) onExpire()
   }, [open, remaining, onExpire])
+
+  // با بسته‌شدن سؤال، بخش بازخورد (و دکمهٔ «سؤال بعدی») نرم وارد دید می‌شود
+  useEffect(() => {
+    if (open) return
+    const el = feedbackRef.current
+    if (!el) return
+    const reduce =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' })
+  }, [open])
 
   /** کلیک روی تصویر (نوع image) */
   const handleAttempt = (point: Pt): void => {
@@ -155,12 +167,26 @@ export function QuestionScreen({
         {/* سؤال چهارگزینه‌ای: تصویر نمایشی (غیرقابل کلیک) بالای گزینه‌ها */}
         {question.type === 'mcq' && question.image && (
           <div className="question__image card">
-            <img
-              src={question.image}
-              alt={question.prompt}
-              draggable={false}
-              className="question__img"
-            />
+            <div
+              className={`imgbox${
+                question.imageWidth > 0 && question.imageHeight > 0 ? '' : ' imgbox--auto'
+              }`}
+              style={
+                question.imageWidth > 0 && question.imageHeight > 0
+                  ? {
+                      aspectRatio: `${question.imageWidth} / ${question.imageHeight}`,
+                      maxWidth: `calc(var(--image-max-h) * ${question.imageWidth} / ${question.imageHeight})`,
+                    }
+                  : undefined
+              }
+            >
+              <img
+                src={question.image}
+                alt={question.prompt}
+                draggable={false}
+                className="question__img"
+              />
+            </div>
           </div>
         )}
 
@@ -202,7 +228,7 @@ export function QuestionScreen({
           </div>
         )}
 
-        <div className="feedback" aria-live="polite">
+        <div className="feedback" aria-live="polite" ref={feedbackRef}>
           {open && active.attemptsLeft === CONFIG.maxAttempts && !blankNotice && (
             <p className="feedback__hint">
               {multiClick

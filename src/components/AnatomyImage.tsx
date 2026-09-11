@@ -41,6 +41,16 @@ export function AnatomyImage({
   alt = 'تصویر سؤال — روی جای پاسخ کلیک کن',
 }: AnatomyImageProps) {
   const boxRef = useRef<HTMLDivElement>(null)
+  const sized = imageWidth > 0 && imageHeight > 0
+
+  // جعبه هم‌نسبت تصویر و محدود به ارتفاع صفحه؛ پس تصویر روی موبایل کامل جا می‌شود
+  // و نگاشت مختصات (نسبت به قاب جعبه) دقیق می‌ماند.
+  const boxStyle = sized
+    ? {
+        aspectRatio: `${imageWidth} / ${imageHeight}`,
+        maxWidth: `calc(var(--image-max-h) * ${imageWidth} / ${imageHeight})`,
+      }
+    : undefined
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (locked) return
@@ -56,7 +66,8 @@ export function AnatomyImage({
   return (
     <div
       ref={boxRef}
-      className={`anatomy${locked ? ' anatomy--locked' : ''}`}
+      className={`anatomy${locked ? ' anatomy--locked' : ''}${sized ? '' : ' anatomy--auto'}`}
+      style={boxStyle}
       onClick={handleClick}
     >
       <img src={image} alt={alt} draggable={false} />
