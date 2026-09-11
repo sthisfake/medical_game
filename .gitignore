@@ -21,3 +21,6 @@ Thumbs.db
 # client reference images (not part of the app)
 client-brief/
 *.tsbuildinfo
+
+# leftovers from headless-browser layout checks
+.chrome-profile/

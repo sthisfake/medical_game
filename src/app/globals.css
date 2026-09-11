@@ -36,6 +36,10 @@
   --image-max-h: 64vh;
   --image-max-h: 64dvh;
 
+  /* تصویر نمایشیِ سؤال‌های گزینه‌ای: کوتاه‌تر، چون گزینه‌ها هم باید دیده شوند */
+  --image-max-h-display: 54vh;
+  --image-max-h-display: 54dvh;
+
   font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
 }
 
@@ -558,6 +562,7 @@ a:hover {
 
 /* جعبهٔ تصویر نمایشی سؤال چهارگزینه‌ای (هم‌نسبت، بدون اعوجاج) */
 .imgbox {
+  position: relative;
   width: 100%;
   margin-inline: auto;
   border-radius: calc(var(--r-sm) - 3px);
@@ -569,22 +574,72 @@ a:hover {
   max-width: 100%;
 }
 
-/* تصویر نمایشی سؤال چهارگزینه‌ای (غیرقابل کلیک) */
+/* تصویر نمایشی سؤال چهارگزینه‌ای (غیرقابل کلیک برای پاسخ — با لمس بزرگ می‌شود) */
 .question__img {
   display: block;
   width: 100%;
   height: 100%;
   border-radius: calc(var(--r-sm) - 3px);
-  pointer-events: none;
+  cursor: zoom-in;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.imgbox__zoom {
+  position: absolute;
+  bottom: 6px;
+  inset-inline-start: 6px;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--r-pill);
+  background: rgba(12, 18, 26, 0.6);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* نمای تمام‌صفحهٔ تصویر (لمس تصویر نمایشی سؤال‌های گزینه‌ای) */
+.imgzoom {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(12, 18, 26, 0.92);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.imgzoom img {
+  max-width: 100%;
+  max-height: calc(100vh - 5rem);
+  max-height: calc(100dvh - 5rem);
+  border-radius: var(--r-sm);
+  background: #fff;
+}
+
+.imgzoom__close {
+  position: fixed;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  inset-inline-end: 1rem;
+  height: 42px;
+  padding: 0 1.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .imgbox--auto .question__img {
   width: auto;
   height: auto;
   max-width: 100%;
-  max-height: var(--image-max-h);
+  max-height: var(--image-max-h-display);
 }
 
 .anatomy--locked {
@@ -1759,9 +1814,14 @@ a:hover {
 /* ---------------- گوشی: چیدمان جمع‌وجور و لمس‌پذیر ---------------- */
 @media (max-width: 700px) {
   :root {
-    /* تصویر سؤال کوتاه‌تر می‌شود تا گزینه‌ها هم در دید باشند */
+    /* تصویر سؤال کلیک‌شدنی کوتاه‌تر می‌شود تا در دید بماند */
     --image-max-h: 44vh;
     --image-max-h: 44dvh;
+
+    /* تصویر نمایشیِ سؤال گزینه‌ای: به‌اندازه‌ای که «تصویر + گزینه‌ها» هر دو جا شوند.
+       ارتفاع آزاد = ارتفاع صفحه − (نوار بالا + متن سؤال + گزینه‌ها + نوار پایین) */
+    --image-max-h-display: clamp(96px, calc(100vh - 540px), 40vh);
+    --image-max-h-display: clamp(96px, calc(100dvh - 540px), 40dvh);
   }
 
   .screen {
@@ -1800,47 +1860,53 @@ a:hover {
   }
 
   /* --- متن سؤال --- */
+  .question {
+    padding-top: 0.5rem;
+  }
+
   .question__meta {
-    gap: 0.35rem;
+    gap: 0.3rem;
+    margin-bottom: 0.4rem;
   }
 
   .pill {
-    font-size: 0.72rem;
-    padding: 0.2rem 0.6rem;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.55rem;
   }
 
   .question__prompt {
-    font-size: 1.02rem;
-    line-height: 1.85;
-    padding-bottom: 0.8rem;
+    font-size: 1rem;
+    line-height: 1.75;
+    padding-bottom: 0.5rem;
   }
 
   .question__image,
   .question__options,
   .question__video {
-    margin-bottom: 0.9rem;
+    margin-bottom: 0.55rem;
   }
 
   .question__image {
-    padding: 6px;
+    padding: 5px;
   }
 
   /* --- گزینه‌ها: تمام‌عرض با ارتفاع راحت انگشت --- */
   .options {
-    gap: 0.5rem;
+    gap: 0.4rem;
   }
 
   .option {
-    min-height: 58px;
-    gap: 0.7rem;
-    padding: 0.7rem 0.85rem;
-    font-size: 0.95rem;
+    min-height: 54px;
+    gap: 0.6rem;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.92rem;
+    line-height: 1.75;
   }
 
   .option__key {
-    width: 28px;
-    height: 28px;
-    font-size: 0.8rem;
+    width: 27px;
+    height: 27px;
+    font-size: 0.78rem;
   }
 
   /* --- بازخورد و دکمهٔ ادامه --- */

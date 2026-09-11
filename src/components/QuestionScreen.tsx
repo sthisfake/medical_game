@@ -48,7 +48,9 @@ export function QuestionScreen({
   const [correctMarkers, setCorrectMarkers] = useState<Pt[]>([])
   const [blankNotice, setBlankNotice] = useState(false)
   const [chosen, setChosen] = useState<number | null>(null)
+  const [zoom, setZoom] = useState(false)
   const feedbackRef = useRef<HTMLDivElement>(null)
+  const optionsRef = useRef<HTMLDivElement>(null)
   const qKey = `${stage.id}:${questionIndex}:${question.id}`
 
   const correctZones = question.zones.filter((z) => z.correct !== false).length
@@ -74,17 +76,6 @@ export function QuestionScreen({
   useEffect(() => {
     if (open && remaining === 0) onExpire()
   }, [open, remaining, onExpire])
-
-  // با بسته‌شدن سؤال، بخش بازخورد (و دکمهٔ «سؤال بعدی») نرم وارد دید می‌شود
-  useEffect(() => {
-    if (open) return
-    const el = feedbackRef.current
-    if (!el) return
-    const reduce =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' })
-  }, [open])
 
   /** کلیک روی تصویر (نوع image) */
   const handleAttempt = (point: Pt): void => {
@@ -121,6 +112,57 @@ export function QuestionScreen({
   }
 
   const isMcq = question.type === 'mcq' || question.type === 'video'
+
+  /**
+   * بخشی از صفحه را تا بالای نوار پایین (شمارنده‌ها) در دید می‌آورد —
+   * چون آن نوار ثابت است و می‌تواند گزینه‌ها یا دکمهٔ «سؤال بعدی» را بپوشاند.
+   */
+  const revealAboveBar = (el: HTMLElement | null): void => {
+    if (!el) return
+    const bar = document.querySelector('.scorebar-wrap')
+    const limit = bar ? bar.getBoundingClientRect().top : window.innerHeight
+    const overflow = el.getBoundingClientRect().bottom - (limit - 12)
+    if (overflow <= 0) return
+    const reduce =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    window.scrollBy({ top: overflow, behavior: reduce ? 'auto' : 'smooth' })
+  }
+
+  // سؤال جدید: از بالای صفحه شروع کن و (روی صفحهٔ کوچک) گزینه‌ها را در دید بیاور
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' })
+    if (!isMcq) return
+    // گوشی عمودی (عرض کم) یا گوشی افقی (ارتفاع کم)
+    const small =
+      window.matchMedia?.('(max-width: 700px)').matches ||
+      window.matchMedia?.('(max-height: 520px)').matches
+    if (!small) return
+    const t = window.setTimeout(() => revealAboveBar(optionsRef.current), 120)
+    return () => window.clearTimeout(t)
+  }, [qKey, isMcq])
+
+  // با بسته‌شدن سؤال، بخش بازخورد (و دکمهٔ «سؤال بعدی») نرم وارد دید می‌شود
+  useEffect(() => {
+    if (open) return
+    const t = window.setTimeout(() => revealAboveBar(feedbackRef.current), 80)
+    return () => window.clearTimeout(t)
+  }, [open])
+
+  // نمای بزرگ‌شدهٔ تصویر: بستن با Esc و قفل اسکرول پشت آن
+  useEffect(() => {
+    if (!zoom) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setZoom(false)
+    }
+    window.addEventListener('keydown', onKey)
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previous
+    }
+  }, [zoom])
 
   return (
     <div className="screen screen--play">
@@ -164,7 +206,7 @@ export function QuestionScreen({
           </div>
         )}
 
-        {/* سؤال چهارگزینه‌ای: تصویر نمایشی (غیرقابل کلیک) بالای گزینه‌ها */}
+        {/* سؤال چهارگزینه‌ای: تصویر نمایشی بالای گزینه‌ها — با لمس بزرگ می‌شود */}
         {question.type === 'mcq' && question.image && (
           <div className="question__image card">
             <div
@@ -175,7 +217,7 @@ export function QuestionScreen({
                 question.imageWidth > 0 && question.imageHeight > 0
                   ? {
                       aspectRatio: `${question.imageWidth} / ${question.imageHeight}`,
-                      maxWidth: `calc(var(--image-max-h) * ${question.imageWidth} / ${question.imageHeight})`,
+                      maxWidth: `calc(var(--image-max-h-display) * ${question.imageWidth} / ${question.imageHeight})`,
                     }
                   : undefined
               }
@@ -185,13 +227,23 @@ export function QuestionScreen({
                 alt={question.prompt}
                 draggable={false}
                 className="question__img"
+                role="button"
+                tabIndex={0}
+                aria-label="بزرگ‌نمایی تصویر"
+                onClick={() => setZoom(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setZoom(true)
+                }}
               />
+              <span className="imgbox__zoom" aria-hidden="true">
+                بزرگ‌نمایی
+              </span>
             </div>
           </div>
         )}
 
         {isMcq && (
-          <div className="question__options">
+          <div className="question__options" ref={optionsRef}>
             <div className="options" role="group" aria-label="گزینه‌های پاسخ">
               {question.options.map((opt, i) => {
                 const isCorrect = i === question.correctIndex
@@ -306,6 +358,21 @@ export function QuestionScreen({
       <footer className="scorebar-wrap">
         <ScoreBar stageTitle={`${stage.title}`} stats={stats} current={questionIndex + 1} />
       </footer>
+
+      {zoom && question.image && (
+        <div
+          className="imgzoom"
+          role="dialog"
+          aria-modal="true"
+          aria-label="تصویر سؤال"
+          onClick={() => setZoom(false)}
+        >
+          <img src={question.image} alt={question.prompt} draggable={false} />
+          <button type="button" className="imgzoom__close" onClick={() => setZoom(false)}>
+            بستن
+          </button>
+        </div>
+      )}
     </div>
   )
 }
