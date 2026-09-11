@@ -23,5 +23,4 @@ client-brief/
 *.tsbuildinfo
 
 # leftovers from headless-browser layout checks
-.chrome-profile/
-.chrome-profile2/
+.chrome-profile*/

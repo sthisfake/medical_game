@@ -515,6 +515,14 @@ a:hover {
   .question__body--split .question__video {
     width: min(100%, calc(var(--video-max-h) * 16 / 9));
   }
+
+  /* با توضیح آموزشیِ بالای سؤال، تصویر/ویدیو کمی کوتاه‌تر می‌شود */
+  .question--has-explain {
+    --image-max-h-display: clamp(200px, calc(100vh - 470px), 52vh);
+    --image-max-h-display: clamp(200px, calc(100dvh - 470px), 52dvh);
+    --video-max-h: calc(100vh - 470px);
+    --video-max-h: calc(100dvh - 470px);
+  }
 }
 
 .question__meta {
@@ -800,6 +808,25 @@ a:hover {
   color: var(--ink-2);
   font-size: 0.95rem;
   line-height: 2.1;
+}
+
+/* توضیح آموزشیِ همیشه‌نمایش — بالای تصویر/گزینه‌ها، با همان ظاهر کارت توضیح */
+.explain--inline {
+  max-width: 680px;
+  margin: 0 auto 1rem;
+  padding: 0.85rem 1.1rem 0.9rem;
+  text-align: start;
+}
+
+.explain--inline h2 {
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+  margin-bottom: 0.25rem;
+}
+
+.explain--inline p {
+  font-size: 0.93rem;
+  line-height: 1.95;
 }
 
 .feedback__actions {
@@ -1856,6 +1883,12 @@ a:hover {
     /* تصویر نمایشیِ سؤال گزینه‌ای: به‌اندازه‌ای که «تصویر + گزینه‌ها» هر دو جا شوند */
     --image-max-h-display: clamp(96px, calc(100vh - 530px), 40vh);
     --image-max-h-display: clamp(96px, calc(100dvh - 530px), 40dvh);
+  }
+
+  /* وقتی توضیح آموزشی هم بالای سؤال هست، تصویر کمی کوتاه‌تر می‌شود تا همه‌چیز جا شود */
+  .question--has-explain {
+    --image-max-h-display: clamp(84px, calc(100vh - 620px), 34vh);
+    --image-max-h-display: clamp(84px, calc(100dvh - 620px), 34dvh);
   }
 
   .screen {

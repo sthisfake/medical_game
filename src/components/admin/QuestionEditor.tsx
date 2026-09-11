@@ -287,7 +287,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
           </label>
 
           <label className="field">
-            <span>توضیح آموزشی (بعد از دو بار اشتباه نمایش داده می‌شود)</span>
+            <span>توضیح آموزشی (اگر پر باشد، همیشه زیر متن سؤال نمایش داده می‌شود)</span>
             <textarea
               rows={4}
               value={explanation}

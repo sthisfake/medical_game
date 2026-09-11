@@ -112,6 +112,7 @@ export function QuestionScreen({
   }
 
   const isMcq = question.type === 'mcq' || question.type === 'video'
+  const hasExplanation = (question.explanation ?? '').trim().length > 0
 
   /**
    * بخشی از صفحه را تا بالای نوار پایین (شمارنده‌ها) در دید می‌آورد —
@@ -170,7 +171,7 @@ export function QuestionScreen({
         <TimerRing secondsLeft={remaining} totalSeconds={CONFIG.questionSeconds} />
       </header>
 
-      <main className="question">
+      <main className={`question${hasExplanation ? ' question--has-explain' : ''}`}>
         <div className="question__meta">
           <span className="pill">
             سؤال {toFa(questionIndex + 1)} از {toFa(stats.total)}
@@ -179,6 +180,14 @@ export function QuestionScreen({
         </div>
 
         <h1 className="question__prompt">{question.prompt}</h1>
+
+        {/* توضیح آموزشی: اگر مقدار داشته باشد همیشه (از لحظهٔ نمایش سؤال) دیده می‌شود */}
+        {hasExplanation && (
+          <aside className="explain explain--inline card" aria-label="توضیح آموزشی">
+            <h2>توضیح آموزشی</h2>
+            <p>{question.explanation}</p>
+          </aside>
+        )}
 
         {/* بدنهٔ سؤال: روی صفحهٔ پهن، تصویر/ویدیو کنار گزینه‌ها قرار می‌گیرد */}
         <div className={`question__body${isMcq ? ' question__body--split' : ''}`}>
@@ -342,12 +351,8 @@ export function QuestionScreen({
                     : 'پاسخ درست با رنگ سبز روی تصویر مشخص شده است.'}
                 </span>
               </div>
-              <div className="explain card">
-                <h2>توضیح آموزشی</h2>
-                <p>{question.explanation}</p>
-                <div className="feedback__actions">
-                  <Button onClick={onNext}>سؤال بعدی</Button>
-                </div>
+              <div className="feedback__actions">
+                <Button onClick={onNext}>سؤال بعدی</Button>
               </div>
             </div>
           )}
