@@ -36,9 +36,10 @@
   --image-max-h: 64vh;
   --image-max-h: 64dvh;
 
-  /* تصویر نمایشیِ سؤال‌های گزینه‌ای: کوتاه‌تر، چون گزینه‌ها هم باید دیده شوند */
-  --image-max-h-display: 54vh;
-  --image-max-h-display: 54dvh;
+  /* تصویر نمایشیِ سؤال‌های گزینه‌ای: کوتاه‌تر، چون گزینه‌ها هم باید دیده شوند.
+     ارتفاع آزاد = ارتفاع صفحه − (نوار بالا + متن سؤال + گزینه‌ها + نوار پایین) */
+  --image-max-h-display: clamp(150px, calc(100vh - 560px), 48vh);
+  --image-max-h-display: clamp(150px, calc(100dvh - 560px), 48dvh);
 
   font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
 }
@@ -479,7 +480,41 @@ a:hover {
 /* ---------------- بدنهٔ سؤال ---------------- */
 
 .question {
-  padding-top: 1.4rem;
+  padding-top: 1rem;
+}
+
+/* روی صفحهٔ پهن، تصویر/ویدیو در یک ستون و گزینه‌ها در ستون دیگر → هیچ‌کدام پشت
+   نوار پایین پنهان نمی‌شوند و تصویر هم بزرگ می‌ماند */
+@media (min-width: 900px) {
+  :root {
+    --image-max-h-display: clamp(220px, calc(100vh - 380px), 60vh);
+    --image-max-h-display: clamp(220px, calc(100dvh - 380px), 60dvh);
+    --video-max-h: calc(100vh - 380px);
+    --video-max-h: calc(100dvh - 380px);
+  }
+
+  .question__body--split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.85fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .question__body--split .question__image,
+  .question__body--split .question__options,
+  .question__body--split .question__video {
+    max-width: none;
+    margin-inline: 0;
+    margin-bottom: 0;
+  }
+
+  .question__body--split .imgbox {
+    margin-inline: 0;
+  }
+
+  .question__body--split .question__video {
+    width: min(100%, calc(var(--video-max-h) * 16 / 9));
+  }
 }
 
 .question__meta {
@@ -487,7 +522,7 @@ a:hover {
   justify-content: center;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.7rem;
 }
 
 .pill {
@@ -513,7 +548,7 @@ a:hover {
   font-size: clamp(1.05rem, 2.6vw, 1.3rem);
   font-weight: 700;
   line-height: 2.1;
-  padding: 0.2rem 0 1.2rem;
+  padding: 0.2rem 0 0.9rem;
   max-width: 680px;
   margin-inline: auto;
 }
@@ -1818,10 +1853,9 @@ a:hover {
     --image-max-h: 44vh;
     --image-max-h: 44dvh;
 
-    /* تصویر نمایشیِ سؤال گزینه‌ای: به‌اندازه‌ای که «تصویر + گزینه‌ها» هر دو جا شوند.
-       ارتفاع آزاد = ارتفاع صفحه − (نوار بالا + متن سؤال + گزینه‌ها + نوار پایین) */
-    --image-max-h-display: clamp(96px, calc(100vh - 540px), 40vh);
-    --image-max-h-display: clamp(96px, calc(100dvh - 540px), 40dvh);
+    /* تصویر نمایشیِ سؤال گزینه‌ای: به‌اندازه‌ای که «تصویر + گزینه‌ها» هر دو جا شوند */
+    --image-max-h-display: clamp(96px, calc(100vh - 530px), 40vh);
+    --image-max-h-display: clamp(96px, calc(100dvh - 530px), 40dvh);
   }
 
   .screen {

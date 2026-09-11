@@ -129,15 +129,11 @@ export function QuestionScreen({
     window.scrollBy({ top: overflow, behavior: reduce ? 'auto' : 'smooth' })
   }
 
-  // سؤال جدید: از بالای صفحه شروع کن و (روی صفحهٔ کوچک) گزینه‌ها را در دید بیاور
+  // سؤال جدید: از بالای صفحه شروع کن و اگر گزینه‌ها بیرون دید بودند، آن‌ها را در دید بیاور
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' })
     if (!isMcq) return
-    // گوشی عمودی (عرض کم) یا گوشی افقی (ارتفاع کم)
-    const small =
-      window.matchMedia?.('(max-width: 700px)').matches ||
-      window.matchMedia?.('(max-height: 520px)').matches
-    if (!small) return
+    // فقط وقتی کاری می‌کند که گزینه‌ها زیر نوار پایین مانده باشند (صفحه‌های کوچک یا متن بلند)
     const t = window.setTimeout(() => revealAboveBar(optionsRef.current), 120)
     return () => window.clearTimeout(t)
   }, [qKey, isMcq])
@@ -184,66 +180,68 @@ export function QuestionScreen({
 
         <h1 className="question__prompt">{question.prompt}</h1>
 
-        {question.type === 'video' && question.videoUrl && (
-          <div className="question__video">
-            <VideoPlayer url={question.videoUrl} />
-          </div>
-        )}
-
-        {question.type === 'image' && (
-          <div className="question__image card">
-            <AnatomyImage
-              image={question.image}
-              imageWidth={question.imageWidth}
-              imageHeight={question.imageHeight}
-              zones={question.zones}
-              reveal={!open}
-              wrongMarkers={wrongMarkers}
-              correctMarkers={correctMarkers}
-              onAttempt={handleAttempt}
-              locked={!open}
-            />
-          </div>
-        )}
-
-        {/* سؤال چهارگزینه‌ای: تصویر نمایشی بالای گزینه‌ها — با لمس بزرگ می‌شود */}
-        {question.type === 'mcq' && question.image && (
-          <div className="question__image card">
-            <div
-              className={`imgbox${
-                question.imageWidth > 0 && question.imageHeight > 0 ? '' : ' imgbox--auto'
-              }`}
-              style={
-                question.imageWidth > 0 && question.imageHeight > 0
-                  ? {
-                      aspectRatio: `${question.imageWidth} / ${question.imageHeight}`,
-                      maxWidth: `calc(var(--image-max-h-display) * ${question.imageWidth} / ${question.imageHeight})`,
-                    }
-                  : undefined
-              }
-            >
-              <img
-                src={question.image}
-                alt={question.prompt}
-                draggable={false}
-                className="question__img"
-                role="button"
-                tabIndex={0}
-                aria-label="بزرگ‌نمایی تصویر"
-                onClick={() => setZoom(true)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setZoom(true)
-                }}
-              />
-              <span className="imgbox__zoom" aria-hidden="true">
-                بزرگ‌نمایی
-              </span>
+        {/* بدنهٔ سؤال: روی صفحهٔ پهن، تصویر/ویدیو کنار گزینه‌ها قرار می‌گیرد */}
+        <div className={`question__body${isMcq ? ' question__body--split' : ''}`}>
+          {question.type === 'video' && question.videoUrl && (
+            <div className="question__video">
+              <VideoPlayer url={question.videoUrl} />
             </div>
-          </div>
-        )}
+          )}
 
-        {isMcq && (
-          <div className="question__options" ref={optionsRef}>
+          {question.type === 'image' && (
+            <div className="question__image card">
+              <AnatomyImage
+                image={question.image}
+                imageWidth={question.imageWidth}
+                imageHeight={question.imageHeight}
+                zones={question.zones}
+                reveal={!open}
+                wrongMarkers={wrongMarkers}
+                correctMarkers={correctMarkers}
+                onAttempt={handleAttempt}
+                locked={!open}
+              />
+            </div>
+          )}
+
+          {/* سؤال چهارگزینه‌ای: تصویر نمایشی — روی صفحهٔ پهن کنار گزینه‌ها، روی گوشی بالای آن‌ها */}
+          {question.type === 'mcq' && question.image && (
+            <div className="question__image card">
+              <div
+                className={`imgbox${
+                  question.imageWidth > 0 && question.imageHeight > 0 ? '' : ' imgbox--auto'
+                }`}
+                style={
+                  question.imageWidth > 0 && question.imageHeight > 0
+                    ? {
+                        aspectRatio: `${question.imageWidth} / ${question.imageHeight}`,
+                        maxWidth: `calc(var(--image-max-h-display) * ${question.imageWidth} / ${question.imageHeight})`,
+                      }
+                    : undefined
+                }
+              >
+                <img
+                  src={question.image}
+                  alt={question.prompt}
+                  draggable={false}
+                  className="question__img"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="بزرگ‌نمایی تصویر"
+                  onClick={() => setZoom(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') setZoom(true)
+                  }}
+                />
+                <span className="imgbox__zoom" aria-hidden="true">
+                  بزرگ‌نمایی
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isMcq && (
+            <div className="question__options" ref={optionsRef}>
             <div className="options" role="group" aria-label="گزینه‌های پاسخ">
               {question.options.map((opt, i) => {
                 const isCorrect = i === question.correctIndex
@@ -278,7 +276,8 @@ export function QuestionScreen({
               })}
             </div>
           </div>
-        )}
+          )}
+        </div>
 
         <div className="feedback" aria-live="polite" ref={feedbackRef}>
           {open && active.attemptsLeft === CONFIG.maxAttempts && !blankNotice && (
