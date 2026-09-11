@@ -13,7 +13,8 @@
     "smoke": "node scripts/smoke.mjs",
     "backup": "node scripts/backup.mjs",
     "snapshot": "node scripts/snapshot.mjs",
-    "push:remote": "node scripts/load-remote.mjs"
+    "push:remote": "node scripts/load-remote.mjs",
+    "check:live": "node scripts/check-live.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

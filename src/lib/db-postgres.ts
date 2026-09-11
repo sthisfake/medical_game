@@ -60,13 +60,18 @@ function parseZones(raw: string): AnswerZone[] {
 }
 
 function parseOptions(raw: string): string[] {
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((o): o is string => typeof o === 'string')
-  } catch {
-    return []
+  // ممکن است مقدار یک یا دو بار کدگذاری شده باشد (باگ قدیمی اسکریپت انتقال داده)
+  let value: unknown = raw
+  for (let depth = 0; depth < 2; depth += 1) {
+    if (typeof value !== 'string') break
+    try {
+      value = JSON.parse(value)
+    } catch {
+      return []
+    }
+    if (Array.isArray(value)) return value.filter((o): o is string => typeof o === 'string')
   }
+  return []
 }
 
 function rowToQuestion(row: DbQuestionRow): Question {

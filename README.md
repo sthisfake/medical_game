@@ -130,10 +130,16 @@ npm start
   npm run snapshot                        # ← خروجی از دیتابیس محلی → data/snapshot.json
   DATABASE_URL="postgresql://…" npm run push:remote          # ← انتقال به Neon
   DATABASE_URL="postgresql://…" npm run push:remote -- --force  # ← جایگزینی کامل دادهٔ مقصد
+  npm run check:live -- https://xxxx.vercel.app               # ← بازبینی محتوای سایت منتشرشده
   ```
 
   پس از این انتقال، از پنلِ استقرارشده در Vercel ادامه دهید؛ همهٔ تغییرات بعدی همان‌جا
   (در Neon) ذخیره می‌شوند و دیگر نیازی به انتقال دوباره نیست.
+
+  > `push:remote` در پایان خودش بررسی می‌کند که هیچ سؤال گزینه‌ای/ویدیویی بدون گزینه در
+  > مقصد نمانده باشد و در صورت مشکل با خطا خارج می‌شود. `check:live` هم همین بازبینی را
+  > روی سایت منتشرشده انجام می‌دهد (گزینه‌ها، گزینهٔ درست، ناحیه‌ها، دسترس‌بودن تصویرها و
+  > ویدیوها) — بعد از هر استقرار یک‌بار اجرا کنید.
 
 ## ساختار پروژه
 
@@ -141,6 +147,7 @@ npm start
 data/game.db                ← SQLite محلی (فقط وقتی DATABASE_URL تنظیم نباشد؛ در git نیست)
 .env.example                ← نمونهٔ متغیرهای محیطی
 scripts/smoke.mjs           ← تست خودکار API (node scripts/smoke.mjs)
+scripts/check-live.mjs      ← بازبینی محتوای سایت منتشرشده (npm run check:live -- <url>)
 scripts/snapshot.mjs        ← خروجی از SQLite محلی (npm run snapshot)
 scripts/load-remote.mjs     ← انتقال snapshot به Neon (npm run push:remote)
 src/

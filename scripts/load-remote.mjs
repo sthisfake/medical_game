@@ -116,6 +116,9 @@ try {
     for (const qq of st.questions ?? []) {
       const m = /\/api\/uploads\/(\d+)/.exec(qq.image ?? '')
       const image = m && imageMap.has(Number(m[1])) ? imageMap.get(Number(m[1])) : qq.image
+      // در فایل خروجی، options به‌صورت رشتهٔ JSON ذخیره شده است → دوباره کدگذاری نکن
+      const optionsJson =
+        typeof qq.options === 'string' ? qq.options : JSON.stringify(qq.options ?? [])
       await q(
         `INSERT INTO questions
            (stage_id, prompt, explanation, image, image_width, image_height, zones,
@@ -128,9 +131,9 @@ try {
           image ?? '',
           qq.image_width ?? 0,
           qq.image_height ?? 0,
-          qq.zones ?? '[]',
+          typeof qq.zones === 'string' ? qq.zones : JSON.stringify(qq.zones ?? []),
           qq.type ?? 'image',
-          JSON.stringify(qq.options ?? []),
+          optionsJson,
           qq.correct_index ?? -1,
           qq.video_url ?? '',
           qq.sort ?? 0,
@@ -140,11 +143,25 @@ try {
     }
   }
 
+  // بازبینی: سؤال‌های گزینه‌ای/ویدیویی باید گزینه داشته باشند
+  const broken = await q(
+    `SELECT COUNT(*) AS n FROM questions
+     WHERE type IN ('mcq', 'video') AND (options IS NULL OR options = '[]' OR options = '""')`,
+  )
+  const brokenCount = Number(broken[0].n)
+
   await q("INSERT INTO meta (key, value) VALUES ('seeded', '1') ON CONFLICT (key) DO UPDATE SET value = '1'")
   await q('COMMIT')
 
   const host = /@([^/:]+)/.exec(DATABASE_URL)?.[1] ?? DATABASE_URL.slice(0, 30)
   console.log(`انتقال انجام شد: ${snap.stages?.length ?? 0} مرحله، ${qCount} سؤال، ${snap.uploads?.length ?? 0} تصویر → ${host}`)
+  if (brokenCount > 0) {
+    console.error(
+      `هشدار: ${brokenCount} سؤال گزینه‌ای/ویدیویی بدون گزینه در مقصد ثبت شد — ساختار options را بررسی کنید.`,
+    )
+    process.exit(1)
+  }
+  console.log('بازبینی: همهٔ سؤال‌های گزینه‌ای/ویدیویی گزینه دارند ✅')
 } catch (e) {
   try {
     await q('ROLLBACK')
