@@ -7,6 +7,7 @@ import type { Pt } from '../lib/geo'
 import { toFa } from '../lib/format'
 import type { ActiveQuestion, Question, Stage, StageStats } from '../types'
 import { AnatomyImage } from './AnatomyImage'
+import { ImageLabels } from './ImageLabels'
 import { ScoreBar } from './ScoreBar'
 import { TimerRing } from './TimerRing'
 import { VideoPlayer } from './VideoPlayer'
@@ -209,6 +210,7 @@ export function QuestionScreen({
                 correctMarkers={correctMarkers}
                 onAttempt={handleAttempt}
                 locked={!open}
+                labels={question.labels ?? []}
               />
             </div>
           )}
@@ -245,6 +247,8 @@ export function QuestionScreen({
                 <span className="imgbox__zoom" aria-hidden="true">
                   بزرگ‌نمایی
                 </span>
+                {/* برچسب‌های متنی — فقط بعد از پاسخ‌دادن */}
+                {!open && <ImageLabels labels={question.labels ?? []} />}
               </div>
             </div>
           )}
@@ -371,7 +375,11 @@ export function QuestionScreen({
           aria-label="تصویر سؤال"
           onClick={() => setZoom(false)}
         >
-          <img src={question.image} alt={question.prompt} draggable={false} />
+          <div className="imgzoom__stage">
+            <img src={question.image} alt={question.prompt} draggable={false} />
+            {/* همان برچسب‌ها روی نمای بزرگ هم دیده می‌شوند */}
+            {!open && <ImageLabels labels={question.labels ?? []} />}
+          </div>
           <button type="button" className="imgzoom__close" onClick={() => setZoom(false)}>
             بستن
           </button>

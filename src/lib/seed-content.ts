@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { AnswerZone, QuestionType } from '../types'
+import type { AnswerZone, ImageLabel, QuestionType } from '../types'
 
 /* ------------------------------------------------------------------ */
 /* محتوای دادهٔ نمونه — مستقل از دیتابیس؛ هر دو بک‌اند (SQLite/Postgres) */
@@ -31,6 +31,8 @@ export interface DemoQuestionSeed {
   prompt: string
   explanation: string
   zones: AnswerZone[]
+  /** برچسب‌های روی تصویر — بعد از پاسخ‌دادن در بازی ظاهر می‌شوند */
+  labels?: ImageLabel[]
   type?: QuestionType
   options?: string[]
   correctIndex?: number
@@ -59,6 +61,10 @@ export const demoStage: DemoStageSeed = {
       explanation:
         'ماسِتر قوی‌ترین عضلهٔ جویدن است و در دو طرف صورت (چپ و راست) وجود دارد. از قوس زیگوماتیک (استخوان گونه) شروع می‌شود و به زاویهٔ فک می‌چسبد؛ هر دو طرف را روی تصویر بیابید.',
       zones: [massL, massR],
+      labels: [
+        { text: 'ماسِتر (چپ)', x: 86 / 300, y: 254 / 360 },
+        { text: 'ماسِتر (راست)', x: 214 / 300, y: 254 / 360 },
+      ],
     },
     {
       prompt: 'عضلهٔ دور چشم (اوربیکولاریس اوکولی) کدام است؟',

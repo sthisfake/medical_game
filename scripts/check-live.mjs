@@ -53,6 +53,45 @@ if (all.length > 0) {
   const noZones = imageQs.filter((q) => !Array.isArray(q.zones) || q.zones.length === 0)
   check('همهٔ سؤال‌های تصویری ناحیه دارند', noZones.length === 0, `${imageQs.length} سؤال تصویری`)
 
+  // برچسب‌های روی تصویر: اگر وجود دارند باید ساختارشان سالم باشد
+  // (متن ناتهی + مختصات نرمال ۰..۱) — نبودنشان مشکلی نیست، اختیاری‌اند.
+  const badLabels = []
+  let labelCount = 0
+  for (const q of all) {
+    const labels = q.labels
+    if (labels === undefined || labels === null) continue
+    if (!Array.isArray(labels)) {
+      badLabels.push(`${q.prompt.slice(0, 20)} → labels آرایه نیست`)
+      continue
+    }
+    for (const l of labels) {
+      labelCount += 1
+      const ok =
+        l &&
+        typeof l.text === 'string' &&
+        l.text.trim() !== '' &&
+        typeof l.x === 'number' &&
+        typeof l.y === 'number' &&
+        l.x >= 0 &&
+        l.x <= 1 &&
+        l.y >= 0 &&
+        l.y <= 1
+      if (!ok) badLabels.push(`${q.prompt.slice(0, 20)} → برچسب نامعتبر`)
+    }
+  }
+  check(
+    'برچسب‌های روی تصویر ساختار درستی دارند',
+    badLabels.length === 0,
+    badLabels.length ? badLabels.slice(0, 3).join(' | ') : `${labelCount} برچسب`,
+  )
+
+  const choiceNoLabels = choice.filter((q) => !Array.isArray(q.labels))
+  check(
+    'سؤال‌های گزینه‌ای هم فیلد برچسب دارند (حتی خالی)',
+    choiceNoLabels.length === 0,
+    `${choice.length - choiceNoLabels.length}/${choice.length}`,
+  )
+
   const imageUrls = [...new Set(all.filter((q) => q.image).map((q) => q.image))]
   let brokenImages = []
   for (const u of imageUrls) {

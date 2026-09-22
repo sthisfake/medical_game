@@ -35,6 +35,20 @@ export interface PolygonZone {
 
 export type AnswerZone = EllipseZone | PolygonZone
 
+/**
+ * برچسب متنی روی تصویر — بعد از پاسخ‌دادن به سؤال (درست یا نادرست) روی
+ * تصویر ظاهر می‌شود؛ مثل «عضلهٔ ماسِتر» با یک خط راهنما به همان نقطه.
+ * مختصات «نرمال» (۰..۱ نسبت به عرض/ارتفاع تصویر).
+ */
+export interface ImageLabel {
+  /** متن برچسب */
+  text: string
+  /** نقطهٔ روی تصویر — ۰..۱ از عرض */
+  x: number
+  /** نقطهٔ روی تصویر — ۰..۱ از ارتفاع */
+  y: number
+}
+
 /** نوع سؤال */
 export type QuestionType = 'image' | 'mcq' | 'video'
 
@@ -57,6 +71,11 @@ export interface Question {
   imageHeight: number
   /** ناحیه(های) پاسخ — برای نوع image؛ ناحیه‌های correct !== false پاسخِ درست‌اند */
   zones: AnswerZone[]
+  /**
+   * برچسب‌های متنی روی تصویر — اختیاری. اگر پر باشد، پس از پاسخ‌دادن به سؤال
+   * (درست یا نادرست) روی تصویر نمایش داده می‌شوند. برای نوع image و mcq.
+   */
+  labels: ImageLabel[]
   type: QuestionType
   /** گزینه‌های متنی (برای mcq و video) */
   options: string[]
@@ -119,6 +138,7 @@ export interface QuestionInput {
   imageWidth: number
   imageHeight: number
   zones: AnswerZone[]
+  labels: ImageLabel[]
   type: QuestionType
   options: string[]
   correctIndex: number

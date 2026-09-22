@@ -3,10 +3,12 @@
 import { useRef, useState } from 'react'
 import { pointInZone } from '../../lib/geo'
 import type { Pt } from '../../lib/geo'
-import type { AnswerZone } from '../../types'
+import type { AnswerZone, ImageLabel } from '../../types'
+import { MAX_LABELS, MAX_LABEL_LENGTH } from '../../lib/labels'
+import { ImageLabels } from '../ImageLabels'
 import { Button } from '../ui'
 
-type Tool = 'select' | 'ellipse' | 'polygon'
+type Tool = 'select' | 'ellipse' | 'polygon' | 'label'
 
 interface ZoneCanvasProps {
   zones: AnswerZone[]
@@ -15,19 +17,38 @@ interface ZoneCanvasProps {
   /** ابعاد طبیعی تصویر */
   width: number
   height: number
+  /** برچسب‌های روی تصویر (اختیاری) — پس از پاسخ‌دادن در بازی ظاهر می‌شوند */
+  labels?: ImageLabel[]
+  onLabelsChange?: (labels: ImageLabel[]) => void
+  /** اگر سؤال ناحیهٔ پاسخ ندارد (چهارگزینه‌ای) فقط برچسب‌ها ویرایش می‌شوند */
+  zonesEnabled?: boolean
 }
 
 const MIN_SIZE = 8 // حداقل اندازهٔ بیضی (پیکسل طبیعی)
 
 /**
- * ابزار تعیین ناحیهٔ پاسخ روی تصویر:
+ * ابزار تعیین ناحیهٔ پاسخ و برچسب روی تصویر:
  *  - «بیضی»: کلیک و درگ → ناحیهٔ بیضی
  *  - «چندضلعی»: کلیک برای هر گوشه + دکمهٔ پایان
- *  - «انتخاب»: کلیک روی ناحیه برای انتخاب/حذف/چرخاندن
+ *  - «برچسب»: کلیک روی تصویر → برچسب متنی در آن نقطه (در بازی بعد از پاسخ ظاهر می‌شود)
+ *  - «انتخاب»: کلیک روی ناحیه/برچسب برای انتخاب، ویرایش متن، جابه‌جایی و حذف
  */
-export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvasProps) {
+export function ZoneCanvas({
+  zones,
+  onChange,
+  image,
+  width,
+  height,
+  labels = [],
+  onLabelsChange,
+  zonesEnabled = true,
+}: ZoneCanvasProps) {
   const [tool, setTool] = useState<Tool>('select')
   const [selected, setSelected] = useState<number | null>(null)
+  // برچسب انتخاب‌شده — با نمایهٔ منفی نگه می‌داریم تا با «ناحیه» قاطی نشود
+  const [selectedLabel, setSelectedLabel] = useState<number | null>(null)
+  // جابه‌جایی برچسب با درگ
+  const labelDrag = useRef<{ index: number; moved: boolean } | null>(null)
 
   // بیضی در حال رسم (پیکسل طبیعی)
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
@@ -51,15 +72,61 @@ export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvas
     }
   }
 
+  const setLabels = (next: ImageLabel[]) => {
+    if (next.length > MAX_LABELS) return
+    onLabelsChange?.(next)
+  }
+
+  /** نزدیک‌ترین برچسب به نقطه (پیکسل طبیعی) — برای درگ و انتخاب */
+  const labelAt = (p: Pt): number => {
+    const reach = Math.max(width, height) * 0.045
+    let best = -1
+    let bestDist = reach
+    labels.forEach((l, i) => {
+      const d = Math.hypot(l.x * width - p.x, l.y * height - p.y)
+      if (d < bestDist) {
+        bestDist = d
+        best = i
+      }
+    })
+    return best
+  }
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const p = toPx(e)
     if (!p) return
     e.currentTarget.setPointerCapture(e.pointerId)
+
+    if (tool === 'label') {
+      // اگر روی برچسب موجود کلیک شد، آن را جابه‌جا کن؛ وگرنه برچسب تازه بساز
+      const near = labelAt(p)
+      if (near >= 0) {
+        labelDrag.current = { index: near, moved: false }
+        setSelectedLabel(near)
+        setSelected(null)
+        return
+      }
+      if (labels.length >= MAX_LABELS) return
+      const next = [...labels, { text: '', x: clamp(p.x, width) / width, y: clamp(p.y, height) / height }]
+      setLabels(next)
+      setSelectedLabel(next.length - 1)
+      setSelected(null)
+      return
+    }
+
     if (tool === 'ellipse') {
       setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y })
     } else if (tool === 'polygon') {
       setPolyPts((pts) => [...pts, { x: clamp(p.x, width), y: clamp(p.y, height) }])
     } else {
+      // ابزار انتخاب: کشیدن برچسب برای جابه‌جایی
+      const near = labelAt(p)
+      if (near >= 0) {
+        labelDrag.current = { index: near, moved: false }
+        setSelectedLabel(near)
+        setSelected(null)
+        return
+      }
       downPos.current = p
     }
   }
@@ -68,6 +135,20 @@ export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvas
     const p = toPx(e)
     if (!p) return
     setCursor({ x: clamp(p.x, width), y: clamp(p.y, height) })
+
+    // درگِ برچسب — در ابزار «انتخاب» و «برچسب»
+    const active = labelDrag.current
+    if (active) {
+      const next = labels.map((l, i) =>
+        i === active.index
+          ? { ...l, x: clamp(p.x, width) / width, y: clamp(p.y, height) / height }
+          : l,
+      )
+      active.moved = true
+      setLabels(next)
+      return
+    }
+
     if (tool === 'ellipse' && drag) {
       setDrag({ ...drag, x1: clamp(p.x, width), y1: clamp(p.y, height) })
     }
@@ -76,6 +157,10 @@ export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvas
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     const p = toPx(e)
     if (!p) return
+    if (labelDrag.current) {
+      labelDrag.current = null
+      return
+    }
 
     if (tool === 'ellipse' && drag) {
       const x1 = clamp(p.x, width)
@@ -105,8 +190,20 @@ export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvas
       downPos.current = null
       const moved = start ? Math.hypot(p.x - start.x, p.y - start.y) : 999
       if (moved < 6) {
-        const idx = zones.findIndex((z) => pointInZone(z, p.x, p.y, width, height))
-        setSelected(idx >= 0 ? idx : null)
+        // اول برچسب‌ها (چون روی تصویر شناورند)، بعد ناحیه‌ها
+        const li = labelAt(p)
+        if (li >= 0) {
+          setSelectedLabel(li)
+          setSelected(null)
+          return
+        }
+        setSelectedLabel(null)
+        if (zonesEnabled) {
+          const idx = zones.findIndex((z) => pointInZone(z, p.x, p.y, width, height))
+          setSelected(idx >= 0 ? idx : null)
+        } else {
+          setSelected(null)
+        }
       }
     }
   }
@@ -164,6 +261,15 @@ export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvas
     onChange(next)
   }
 
+  const updateLabel = (index: number, text: string) => {
+    setLabels(labels.map((l, i) => (i === index ? { ...l, text } : l)))
+  }
+
+  const removeLabel = (index: number) => {
+    setLabels(labels.filter((_, i) => i !== index))
+    setSelectedLabel(null)
+  }
+
   return (
     <div className="zone-editor">
       <div className="zone-editor__toolbar">
@@ -174,24 +280,38 @@ export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvas
           >
             انتخاب
           </button>
-          <button
-            className={`tool-btn${tool === 'ellipse' ? ' tool-btn--on' : ''}`}
-            onClick={() => { setTool('ellipse'); setPolyPts([]) }}
-          >
-            ○ بیضی
-          </button>
-          <button
-            className={`tool-btn${tool === 'polygon' ? ' tool-btn--on' : ''}`}
-            onClick={() => { setTool('polygon'); setPolyPts([]) }}
-          >
-            ⬠ چندضلعی
-          </button>
+          {zonesEnabled && (
+            <button
+              className={`tool-btn${tool === 'ellipse' ? ' tool-btn--on' : ''}`}
+              onClick={() => { setTool('ellipse'); setPolyPts([]) }}
+            >
+              ○ بیضی
+            </button>
+          )}
+          {zonesEnabled && (
+            <button
+              className={`tool-btn${tool === 'polygon' ? ' tool-btn--on' : ''}`}
+              onClick={() => { setTool('polygon'); setPolyPts([]) }}
+            >
+              ⬠ چندضلعی
+            </button>
+          )}
+          {onLabelsChange && (
+            <button
+              className={`tool-btn${tool === 'label' ? ' tool-btn--on' : ''}`}
+              onClick={() => { setTool('label'); setPolyPts([]) }}
+            >
+              🏷 برچسب
+            </button>
+          )}
         </div>
 
         <div className="zone-editor__tools">
-          <Button variant="ghost" onClick={clearAll} disabled={zones.length === 0}>
-            پاک‌کردن همه
-          </Button>
+          {zonesEnabled && (
+            <Button variant="ghost" onClick={clearAll} disabled={zones.length === 0}>
+              پاک‌کردن همه
+            </Button>
+          )}
           {tool === 'polygon' && polyPts.length >= 3 && (
             <Button onClick={finishPolygon}>پایان چندضلعی</Button>
           )}
@@ -209,7 +329,12 @@ export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvas
           (polyPts.length === 0
             ? 'برای هر گوشهٔ ناحیه یک‌بار روی تصویر کلیک کنید؛ بعد دکمهٔ «پایان چندضلعی» را بزنید.'
             : `${polyPts.length} گوشه ثبت شد — گوشه‌های بعدی را اضافه یا «پایان» را بزنید.`)}
-        {tool === 'select' && 'برای انتخاب/ویرایش روی ناحیه‌ها کلیک کنید؛ پاسخِ درست را از فهرست پایین مشخص کنید.'}
+        {tool === 'label' &&
+          'روی همان جای آناتومی کلیک کنید تا برچسب آنجا بنشیند؛ متنش را پایین بنویسید. این برچسب‌ها در بازی فقط بعد از پاسخ‌دادن روی تصویر ظاهر می‌شوند.'}
+        {tool === 'select' &&
+          (zonesEnabled
+            ? 'برای انتخاب/ویرایش روی ناحیه‌ها یا برچسب‌ها کلیک کنید؛ پاسخِ درست را از فهرست پایین مشخص کنید.'
+            : 'برای جابه‌جایی برچسب، آن را بکشید؛ برای ویرایش متن، از فهرست پایین استفاده کنید.')}
       </p>
 
       <div
@@ -273,6 +398,9 @@ export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvas
             />
           )}
         </svg>
+
+        {/* برچسب‌ها همیشه در پنل دیده می‌شوند تا جایشان را تنظیم کنید */}
+        <ImageLabels labels={labels} selected={selectedLabel} editing />
       </div>
 
       <p className="zone-list-note">
@@ -340,6 +468,51 @@ export function ZoneCanvas({ zones, onChange, image, width, height }: ZoneCanvas
           </div>
         ))}
       </div>
+
+      {/* ---------- برچسب‌های روی تصویر ---------- */}
+      {onLabelsChange && (
+        <>
+          <p className="zone-list-note">
+            <b>برچسب‌های روی تصویر</b> — اختیاری. این متن‌ها در بازی <b>فقط بعد از پاسخ‌دادن</b> به
+            سؤال (درست یا نادرست) روی تصویر ظاهر می‌شوند و جای آناتومی را نشان می‌دهند. با ابزار
+            «🏷 برچسب» روی تصویر کلیک کنید و متنش را اینجا بنویسید.
+          </p>
+
+          <div className="label-list">
+            {labels.length === 0 && <p className="admin-empty">هنوز برچسبی اضافه نشده است.</p>}
+            {labels.map((label, i) => (
+              <div
+                key={i}
+                className={`label-item${i === selectedLabel ? ' label-item--on' : ''}`}
+                onClick={() => setSelectedLabel(i)}
+              >
+                <span className="label-item__num">{i + 1}</span>
+                <input
+                  type="text"
+                  className="label-item__text"
+                  value={label.text}
+                  maxLength={MAX_LABEL_LENGTH}
+                  placeholder="مثلاً: عضلهٔ ماسِتر"
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => updateLabel(i, e.target.value)}
+                />
+                <span className="label-item__pos">
+                  {Math.round(label.x * 100)}٪ ، {Math.round(label.y * 100)}٪
+                </span>
+                <button
+                  className="btn-link btn-link--danger"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeLabel(i)
+                  }}
+                >
+                  حذف
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

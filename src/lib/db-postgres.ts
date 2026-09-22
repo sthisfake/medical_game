@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless'
-import type { AnswerZone, Question, Stage } from '../types'
+import type { AnswerZone, ImageLabel, Question, Stage } from '../types'
 import { demoImageBytes, demoStage, demoSkeletonStages } from './seed-content'
+import { parseLabels, serializeLabels } from './labels'
 
 /* ------------------------------------------------------------------ */
 /* بک‌اند PostgreSQL — برای Vercel با Neon                             */
@@ -42,6 +43,7 @@ interface DbQuestionRow {
   image_width: number
   image_height: number
   zones: string
+  labels: string
   type: string
   options: string
   correct_index: number
@@ -84,6 +86,7 @@ function rowToQuestion(row: DbQuestionRow): Question {
     imageWidth: row.image_width,
     imageHeight: row.image_height,
     zones: parseZones(row.zones),
+    labels: parseLabels(row.labels),
     type: row.type === 'mcq' || row.type === 'video' ? row.type : 'image',
     options: parseOptions(row.options),
     correctIndex: Number(row.correct_index ?? -1),
@@ -124,6 +127,7 @@ const DDL: string[] = [
      image_width   INTEGER NOT NULL DEFAULT 0,
      image_height  INTEGER NOT NULL DEFAULT 0,
      zones         TEXT   NOT NULL DEFAULT '[]',
+     labels        TEXT   NOT NULL DEFAULT '[]',
      type          TEXT   NOT NULL DEFAULT 'image',
      options       TEXT   NOT NULL DEFAULT '[]',
      correct_index INTEGER NOT NULL DEFAULT -1,
@@ -151,6 +155,8 @@ async function ensureSchema(): Promise<void> {
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS options TEXT NOT NULL DEFAULT '[]'`,
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS correct_index INTEGER NOT NULL DEFAULT -1`,
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT ''`,
+    // برچسب‌های روی تصویر — افزودن ستون، بدون دست‌زدن به دادهٔ موجود
+    `ALTER TABLE questions ADD COLUMN IF NOT EXISTS labels TEXT NOT NULL DEFAULT '[]'`,
   ]
   for (const alter of alters) {
     try {
@@ -185,8 +191,8 @@ async function seedIfEmpty(): Promise<void> {
         await q(
           `INSERT INTO questions
              (stage_id, prompt, explanation, image, image_width, image_height, zones,
-              type, options, correct_index, video_url, sort)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+              labels, type, options, correct_index, video_url, sort)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
           [
             stageId,
             dq.prompt,
@@ -195,6 +201,7 @@ async function seedIfEmpty(): Promise<void> {
             dq.type === 'image' || !dq.type ? 300 : 0,
             dq.type === 'image' || !dq.type ? 360 : 0,
             JSON.stringify(dq.zones),
+            serializeLabels(dq.labels),
             dq.type ?? 'image',
             JSON.stringify(dq.options ?? []),
             dq.correctIndex ?? -1,
@@ -305,6 +312,7 @@ export async function createQuestion(input: {
   imageWidth: number
   imageHeight: number
   zones: AnswerZone[]
+  labels?: ImageLabel[]
   type?: Question['type']
   options?: string[]
   correctIndex?: number
@@ -314,8 +322,8 @@ export async function createQuestion(input: {
   const rows = await q<{ id: number }>(
     `INSERT INTO questions
        (stage_id, prompt, explanation, image, image_width, image_height, zones,
-        type, options, correct_index, video_url, sort)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+        labels, type, options, correct_index, video_url, sort)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
     [
       input.stageId,
       input.prompt,
@@ -324,6 +332,7 @@ export async function createQuestion(input: {
       input.imageWidth,
       input.imageHeight,
       JSON.stringify(input.zones),
+      serializeLabels(input.labels),
       input.type ?? 'image',
       JSON.stringify(input.options ?? []),
       input.correctIndex ?? -1,
@@ -344,6 +353,7 @@ export async function updateQuestion(
     imageWidth: number
     imageHeight: number
     zones: AnswerZone[]
+    labels?: ImageLabel[]
     type?: Question['type']
     options?: string[]
     correctIndex?: number
@@ -355,9 +365,9 @@ export async function updateQuestion(
   await q(
     `UPDATE questions
      SET stage_id = $1, prompt = $2, explanation = $3, image = $4,
-         image_width = $5, image_height = $6, zones = $7,
-         type = $8, options = $9, correct_index = $10, video_url = $11
-     WHERE id = $12`,
+         image_width = $5, image_height = $6, zones = $7, labels = $8,
+         type = $9, options = $10, correct_index = $11, video_url = $12
+     WHERE id = $13`,
     [
       input.stageId,
       input.prompt,
@@ -366,6 +376,7 @@ export async function updateQuestion(
       input.imageWidth,
       input.imageHeight,
       JSON.stringify(input.zones),
+      serializeLabels(input.labels),
       input.type ?? 'image',
       JSON.stringify(input.options ?? []),
       input.correctIndex ?? -1,

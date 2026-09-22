@@ -29,7 +29,7 @@ const full = stages.map((st) => ({
   questions: db
     .prepare(
       `SELECT id, stage_id, prompt, explanation, image, image_width, image_height, zones,
-              type, options, correct_index, video_url, sort
+              labels, type, options, correct_index, video_url, sort
        FROM questions WHERE stage_id = ? ORDER BY sort, id`,
     )
     .all(st.id),

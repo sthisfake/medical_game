@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { api } from '../../lib/api'
 import { toFa } from '../../lib/format'
 import { prepareImageForUpload } from '../../lib/image-resize'
-import type { AnswerZone, Question, QuestionInput, QuestionType, Stage } from '../../types'
+import type { AnswerZone, ImageLabel, Question, QuestionInput, QuestionType, Stage } from '../../types'
 import { AdminShell } from './AdminShell'
 import { ZoneCanvas } from './ZoneCanvas'
 import { VideoPlayer } from '../VideoPlayer'
@@ -48,6 +48,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
   const [imageWidth, setImageWidth] = useState(0)
   const [imageHeight, setImageHeight] = useState(0)
   const [zones, setZones] = useState<AnswerZone[]>([])
+  const [labels, setLabels] = useState<ImageLabel[]>([])
   const [options, setOptions] = useState<string[]>(['', '', '', ''])
   const [correctIndex, setCorrectIndex] = useState(-1)
   const [videoUrl, setVideoUrl] = useState('')
@@ -99,6 +100,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
         setImageWidth(question.imageWidth)
         setImageHeight(question.imageHeight)
         setZones(question.zones)
+        setLabels(question.labels ?? [])
         const opts = question.options.length > 0 ? question.options : ['', '', '', '']
         setOptions(opts.length >= 3 ? opts : [...opts, '', '', ''])
         setCorrectIndex(question.correctIndex)
@@ -202,6 +204,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
       imageWidth,
       imageHeight,
       zones,
+      labels,
       type,
       options: trimmedOptions,
       correctIndex,
@@ -352,6 +355,8 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
                     image={image}
                     width={imageWidth}
                     height={imageHeight}
+                    labels={labels}
+                    onLabelsChange={setLabels}
                   />
                 </div>
               ) : (
@@ -470,6 +475,22 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
                   ۳ یا ۴ گزینه مجاز است؛ گزینهٔ درست با دایرهٔ کنار هر ردیف انتخاب می‌شود.
                 </p>
               </div>
+
+              {type === 'mcq' && image && imageWidth > 0 && imageHeight > 0 && (
+                <div className="admin-card">
+                  <h2 className="zone-title">برچسب‌های روی تصویر (اختیاری)</h2>
+                  <ZoneCanvas
+                    zones={[]}
+                    onChange={() => {}}
+                    zonesEnabled={false}
+                    image={image}
+                    width={imageWidth}
+                    height={imageHeight}
+                    labels={labels}
+                    onLabelsChange={setLabels}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

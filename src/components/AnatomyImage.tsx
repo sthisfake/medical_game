@@ -3,7 +3,8 @@
 import { useRef } from 'react'
 import { zoneToPx } from '../lib/geo'
 import type { Pt } from '../lib/geo'
-import type { AnswerZone } from '../types'
+import type { AnswerZone, ImageLabel } from '../types'
+import { ImageLabels } from './ImageLabels'
 
 interface AnatomyImageProps {
   image: string
@@ -21,6 +22,8 @@ interface AnatomyImageProps {
   onAttempt: (point: Pt) => void
   locked?: boolean
   alt?: string
+  /** برچسب‌های متنی — فقط بعد از پاسخ‌دادن (reveal) نمایش داده می‌شوند */
+  labels?: ImageLabel[]
 }
 
 /**
@@ -39,6 +42,7 @@ export function AnatomyImage({
   onAttempt,
   locked = false,
   alt = 'تصویر سؤال — روی جای پاسخ کلیک کن',
+  labels = [],
 }: AnatomyImageProps) {
   const boxRef = useRef<HTMLDivElement>(null)
   const sized = imageWidth > 0 && imageHeight > 0
@@ -121,6 +125,9 @@ export function AnatomyImage({
           ))}
         </svg>
       )}
+
+      {/* برچسب‌های متنی — فقط بعد از پاسخ‌دادن به سؤال (درست یا نادرست) */}
+      {reveal && <ImageLabels labels={labels} />}
     </div>
   )
 }

@@ -146,6 +146,67 @@ try {
   )
   check('mcq carries display image', mcqDetail.question.image === up.path)
 
+  // 6b) برچسب‌های روی تصویر — ذخیره، خواندن، ویرایش و پاک‌کردن
+  const withLabels = await json(`/api/questions/${mcq.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      stageId: stage.id,
+      prompt: 'Smoke mcq?',
+      explanation: 'e',
+      image: up.path,
+      imageWidth: 1,
+      imageHeight: 1,
+      zones: [],
+      labels: [
+        { text: 'عضلهٔ ماسِتر', x: 0.25, y: 0.4 },
+        { text: 'فک پایین', x: 0.6, y: 0.75 },
+      ],
+      type: 'mcq',
+      options: ['a', 'b', 'c', 'd'],
+      correctIndex: 2,
+    }),
+  })
+  check('update question with image labels', withLabels.ok === true)
+  const labDetail = await json(`/api/questions/${mcq.id}`)
+  check(
+    'labels round-trip text + normalized coords',
+    labDetail.question.labels.length === 2 &&
+      labDetail.question.labels[0].text === 'عضلهٔ ماسِتر' &&
+      labDetail.question.labels[1].x === 0.6 &&
+      labDetail.question.labels[1].y === 0.75,
+  )
+
+  const dirty = await json(`/api/questions/${mcq.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      stageId: stage.id,
+      prompt: 'Smoke mcq?',
+      explanation: 'e',
+      image: up.path,
+      imageWidth: 1,
+      imageHeight: 1,
+      zones: [],
+      // متن خالی و مختصات بیرون از بازه باید پاک‌سازی شوند
+      labels: [
+        { text: '  ', x: 0.2, y: 0.2 },
+        { text: 'درست', x: 5, y: -3 },
+        'not-an-object',
+      ],
+      type: 'mcq',
+      options: ['a', 'b', 'c', 'd'],
+      correctIndex: 2,
+    }),
+  })
+  check('update with dirty labels', dirty.ok === true)
+  const cleaned = await json(`/api/questions/${mcq.id}`)
+  check(
+    'dirty labels sanitized (empty dropped, coords clamped)',
+    cleaned.question.labels.length === 1 &&
+      cleaned.question.labels[0].text === 'درست' &&
+      cleaned.question.labels[0].x === 1 &&
+      cleaned.question.labels[0].y === 0,
+  )
+
   // 7) سؤال ویدیویی (video)
   const vid = await json('/api/questions', {
     method: 'POST',

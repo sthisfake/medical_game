@@ -1,8 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { AnswerZone, Question, Stage } from '../types'
+import type { AnswerZone, ImageLabel, Question, Stage } from '../types'
 import { demoImageBytes, demoStage, demoSkeletonStages } from './seed-content'
+import { parseLabels, serializeLabels } from './labels'
 
 /* ------------------------------------------------------------------ */
 /* بک‌اند SQLite (محلی) — فقط وقتی DATABASE_URL تنظیم نشده استفاده می‌شود */
@@ -30,6 +31,7 @@ interface DbQuestionRow {
   image_width: number
   image_height: number
   zones: string
+  labels: string
   type: string
   options: string
   correct_index: number
@@ -82,6 +84,7 @@ function openDb(): DatabaseSync {
       image_width   INTEGER NOT NULL DEFAULT 0,
       image_height  INTEGER NOT NULL DEFAULT 0,
       zones         TEXT    NOT NULL DEFAULT '[]',
+      labels        TEXT    NOT NULL DEFAULT '[]',
       type          TEXT    NOT NULL DEFAULT 'image',
       options       TEXT    NOT NULL DEFAULT '[]',
       correct_index INTEGER NOT NULL DEFAULT -1,
@@ -105,6 +108,7 @@ function openDb(): DatabaseSync {
   if (!hasCol('correct_index'))
     db.exec(`ALTER TABLE questions ADD COLUMN correct_index INTEGER NOT NULL DEFAULT -1`)
   if (!hasCol('video_url')) db.exec(`ALTER TABLE questions ADD COLUMN video_url TEXT NOT NULL DEFAULT ''`)
+  if (!hasCol('labels')) db.exec(`ALTER TABLE questions ADD COLUMN labels TEXT NOT NULL DEFAULT '[]'`)
 
   return db
 }
@@ -150,6 +154,7 @@ function rowToQuestion(row: DbQuestionRow): Question {
     imageWidth: row.image_width,
     imageHeight: row.image_height,
     zones: parseZones(row.zones),
+    labels: parseLabels(row.labels),
     type: row.type === 'mcq' || row.type === 'video' ? row.type : 'image',
     options: parseOptions(row.options),
     correctIndex: Number(row.correct_index ?? -1),
@@ -240,6 +245,7 @@ export function createQuestion(input: {
   imageWidth: number
   imageHeight: number
   zones: AnswerZone[]
+  labels?: ImageLabel[]
   type?: Question['type']
   options?: string[]
   correctIndex?: number
@@ -250,8 +256,8 @@ export function createQuestion(input: {
     .prepare(
       `INSERT INTO questions
          (stage_id, prompt, explanation, image, image_width, image_height, zones,
-          type, options, correct_index, video_url, sort)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          labels, type, options, correct_index, video_url, sort)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.stageId,
@@ -261,6 +267,7 @@ export function createQuestion(input: {
       input.imageWidth,
       input.imageHeight,
       JSON.stringify(input.zones),
+      serializeLabels(input.labels),
       input.type ?? 'image',
       JSON.stringify(input.options ?? []),
       input.correctIndex ?? -1,
@@ -280,6 +287,7 @@ export function updateQuestion(
     imageWidth: number
     imageHeight: number
     zones: AnswerZone[]
+    labels?: ImageLabel[]
     type?: Question['type']
     options?: string[]
     correctIndex?: number
@@ -291,7 +299,7 @@ export function updateQuestion(
   db.prepare(
     `UPDATE questions
      SET stage_id = ?, prompt = ?, explanation = ?, image = ?,
-         image_width = ?, image_height = ?, zones = ?,
+         image_width = ?, image_height = ?, zones = ?, labels = ?,
          type = ?, options = ?, correct_index = ?, video_url = ?
      WHERE id = ?`,
   ).run(
@@ -302,6 +310,7 @@ export function updateQuestion(
     input.imageWidth,
     input.imageHeight,
     JSON.stringify(input.zones),
+    serializeLabels(input.labels),
     input.type ?? 'image',
     JSON.stringify(input.options ?? []),
     input.correctIndex ?? -1,
@@ -427,6 +436,7 @@ function runSeed(): void {
         imageWidth: dq.type === 'image' || !dq.type ? 300 : 0,
         imageHeight: dq.type === 'image' || !dq.type ? 360 : 0,
         zones: dq.zones,
+        labels: dq.labels,
         type: dq.type ?? 'image',
         options: dq.options,
         correctIndex: dq.correctIndex,

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { deleteQuestion, getQuestion, getStage, updateQuestion } from '@/lib/db'
+import { sanitizeLabels } from '@/lib/labels'
 import type { QuestionInput } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -22,6 +23,8 @@ function parseQuestionInput(body: unknown): QuestionInput | null {
     : []
   const correctIndex = typeof b.correctIndex === 'number' ? Math.round(b.correctIndex) : -1
   const videoUrl = typeof b.videoUrl === 'string' ? b.videoUrl.trim() : ''
+  // برچسب‌های روی تصویر اختیاری‌اند
+  const labels = sanitizeLabels(b.labels)
 
   if (!Number.isFinite(stageId) || !prompt) return null
   if (type === 'image' && !image) return null
@@ -32,7 +35,7 @@ function parseQuestionInput(body: unknown): QuestionInput | null {
   }
   if (type === 'video' && !videoUrl) return null
 
-  return { stageId, prompt, explanation, image, imageWidth, imageHeight, zones, type, options, correctIndex, videoUrl }
+  return { stageId, prompt, explanation, image, imageWidth, imageHeight, zones, labels, type, options, correctIndex, videoUrl }
 }
 
 export async function GET(_request: Request, ctx: Ctx) {

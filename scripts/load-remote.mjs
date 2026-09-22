@@ -4,6 +4,12 @@
 /*   DATABASE_URL=… node scripts/load-remote.mjs [snapshot.json] [--force] */
 /*                                                                     */
 /* اگر دیتابیس مقصد خالی نباشد بدون --force متوقف می‌شود.              */
+/*                                                                     */
+/* ⚠ هشدار: --force دادهٔ فعلیِ مقصد را «جایگزین» می‌کند. اگر محتوای   */
+/*   واقعی روی Neon/Vercel ساخته شده است، این اسکریپت را اجرا نکنید —  */
+/*   همان داده منبع حقیقت است و ویرایش‌ها از پنل مدیریت روی سایت انجام  */
+/*   می‌شود. پیش از جایگزینی، یک پشتیبان از دادهٔ فعلی روی دیسک ذخیره   */
+/*   می‌شود (data/pre-replace-*.json).                                  */
 /* ------------------------------------------------------------------ */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -50,6 +56,7 @@ const DDL = [
      image_width  INTEGER NOT NULL DEFAULT 0,
      image_height INTEGER NOT NULL DEFAULT 0,
      zones        TEXT   NOT NULL DEFAULT '[]',
+     labels       TEXT   NOT NULL DEFAULT '[]',
      type         TEXT   NOT NULL DEFAULT 'image',
      options      TEXT   NOT NULL DEFAULT '[]',
      correct_index INTEGER NOT NULL DEFAULT -1,
@@ -77,6 +84,7 @@ try {
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS options TEXT NOT NULL DEFAULT '[]'`,
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS correct_index INTEGER NOT NULL DEFAULT -1`,
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE questions ADD COLUMN IF NOT EXISTS labels TEXT NOT NULL DEFAULT '[]'`,
   ]) {
     try {
       await q(alter)
@@ -92,6 +100,23 @@ try {
       console.error('دیتابیس مقصد از قبل داده دارد. برای جایگزینی کامل از --force استفاده کنید.')
       process.exit(1)
     }
+    // پیش از هر جایگزینی، یک نسخهٔ پشتیبان از دادهٔ فعلیِ مقصد روی دیسک ذخیره می‌شود
+    // تا اگر اشتباهی اجرا شد، داده از دست نرود.
+    const backup = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      reason: 'پشتیبان خودکار پیش از جایگزینی (push:remote --force)',
+      stages: await q('SELECT * FROM stages ORDER BY "order", id'),
+      questions: await q('SELECT * FROM questions ORDER BY stage_id, sort, id'),
+      uploads: await q('SELECT * FROM uploads ORDER BY id'),
+    }
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const backupPath = path.join(process.cwd(), 'data', `pre-replace-${stamp}.json`)
+    fs.mkdirSync(path.dirname(backupPath), { recursive: true })
+    fs.writeFileSync(backupPath, JSON.stringify(backup))
+    console.log(
+      `پشتیبان از دادهٔ فعلیِ مقصد گرفته شد (${backup.questions.length} سؤال): ${backupPath}`,
+    )
     await q('TRUNCATE uploads, questions, stages, meta RESTART IDENTITY CASCADE')
   }
 
@@ -119,11 +144,14 @@ try {
       // در فایل خروجی، options به‌صورت رشتهٔ JSON ذخیره شده است → دوباره کدگذاری نکن
       const optionsJson =
         typeof qq.options === 'string' ? qq.options : JSON.stringify(qq.options ?? [])
+      // برچسب‌ها هم همین قاعده: اگر رشته است، دست‌نخورده منتقل شود
+      const labelsJson =
+        typeof qq.labels === 'string' ? qq.labels : JSON.stringify(qq.labels ?? [])
       await q(
         `INSERT INTO questions
            (stage_id, prompt, explanation, image, image_width, image_height, zones,
-            type, options, correct_index, video_url, sort)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            labels, type, options, correct_index, video_url, sort)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           stageId,
           qq.prompt,
@@ -132,6 +160,7 @@ try {
           qq.image_width ?? 0,
           qq.image_height ?? 0,
           typeof qq.zones === 'string' ? qq.zones : JSON.stringify(qq.zones ?? []),
+          labelsJson,
           qq.type ?? 'image',
           optionsJson,
           qq.correct_index ?? -1,

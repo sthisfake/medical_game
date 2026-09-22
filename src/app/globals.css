@@ -662,6 +662,16 @@ a:hover {
   background: #fff;
 }
 
+.imgzoom__stage {
+  position: relative;
+  line-height: 0;
+  max-width: 100%;
+}
+
+.imgzoom__stage img {
+  display: block;
+}
+
 .imgzoom__close {
   position: fixed;
   top: calc(0.75rem + env(safe-area-inset-top, 0px));
@@ -831,6 +841,114 @@ a:hover {
 
 .feedback__actions {
   margin-top: 1rem;
+}
+
+/* ---------------- برچسب‌های روی تصویر ---------------- */
+/* در بازی پس از پاسخ‌دادن روی تصویر ظاهر می‌شوند (درست یا نادرست). */
+
+.imglabels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.imglabel {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.imglabel__dot {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.imglabel__text {
+  position: absolute;
+  bottom: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 210px;
+  padding: 0.22rem 0.5rem;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(20, 35, 55, 0.14);
+}
+
+/* خط راهنما از متن تا نقطه */
+.imglabel__text::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1px;
+  height: 9px;
+  background: var(--accent);
+  opacity: 0.75;
+}
+
+.imglabel--below .imglabel__text {
+  bottom: auto;
+  top: 9px;
+}
+
+.imglabel--below .imglabel__text::after {
+  top: auto;
+  bottom: 100%;
+}
+
+/* نزدیک لبهٔ چپ/راست: متن به داخل تصویر کشیده می‌شود تا بریده نشود */
+.imglabel--left .imglabel__text {
+  left: 0;
+  transform: none;
+}
+
+.imglabel--left .imglabel__text::after {
+  left: 7px;
+}
+
+.imglabel--right .imglabel__text {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.imglabel--right .imglabel__text::after {
+  left: auto;
+  right: 7px;
+}
+
+/* در پنل مدیریت */
+.imglabels--editing .imglabel__dot {
+  background: var(--warn);
+}
+
+.imglabel--on .imglabel__dot {
+  box-shadow: 0 0 0 3px rgba(138, 90, 19, 0.35);
+}
+
+.imglabel--on .imglabel__text {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.imglabel--empty .imglabel__text {
+  color: var(--ink-3);
+  font-weight: 600;
+  border-style: dashed;
 }
 
 /* ---------------- ویدیوی سؤال ---------------- */
@@ -1748,6 +1866,73 @@ a:hover {
   flex-direction: column;
   gap: 0.45rem;
   margin-top: 0.85rem;
+}
+
+/* فهرست برچسب‌های روی تصویر (پنل مدیریت) */
+.label-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+}
+
+.label-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: #fbfbfa;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  flex-wrap: wrap;
+  transition: border-color 0.15s ease;
+}
+
+.label-item:hover {
+  border-color: var(--line-strong);
+}
+
+.label-item--on {
+  border-color: var(--warn);
+  background: rgba(138, 90, 19, 0.06);
+}
+
+.label-item__num {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: rgba(138, 90, 19, 0.12);
+  color: var(--warn);
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: 0.75rem;
+  flex: none;
+}
+
+.label-item__text {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+  height: 34px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.label-item__text:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.label-item__pos {
+  color: var(--ink-3);
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .zone-item {
