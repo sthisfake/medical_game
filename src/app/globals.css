@@ -1435,6 +1435,58 @@ a:hover {
   grid-column: 1 / -1;
 }
 
+/* انتخاب زمان نمایش توضیح آموزشی (پنل مدیریت) */
+.mode-choice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.6rem;
+}
+
+.mode-choice__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #cfd4da;
+  border-radius: var(--r-sm);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.mode-choice__item:hover {
+  border-color: var(--line-strong);
+}
+
+.mode-choice__item--on {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.mode-choice__item input {
+  margin-top: 0.2rem;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.mode-choice__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.mode-choice__body b {
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+
+.mode-choice__body em {
+  font-style: normal;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
 .field--actions {
   flex-direction: row;
   align-items: flex-end;

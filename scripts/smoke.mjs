@@ -57,6 +57,19 @@ try {
     'existing video questions are well-formed',
     !vidQ || (!!vidQ.videoUrl && vidQ.options.length >= 3),
   )
+  // ستون تازهٔ زمان نمایش توضیح: دادهٔ قدیمی باید «همیشه» بماند (بدون تغییر رفتار)
+  const badMode = existing.filter(
+    (q) => q.explanationMode !== 'always' && q.explanationMode !== 'after',
+  )
+  check(
+    'every question has a valid explanation mode',
+    existing.length > 0 && badMode.length === 0,
+    badMode.length ? `${badMode.length} سؤال نامعتبر` : `${existing.length} سؤال`,
+  )
+  check(
+    'existing questions default to «always» (behaviour unchanged)',
+    existing.every((q) => q.explanationMode === 'always'),
+  )
   console.log(
     `— محتوا: ${all.stages.length} مرحله، ${existing.length} سؤال ` +
       `(mcq: ${existing.filter((q) => q.type === 'mcq').length}، ` +
@@ -205,6 +218,42 @@ try {
       cleaned.question.labels[0].text === 'درست' &&
       cleaned.question.labels[0].x === 1 &&
       cleaned.question.labels[0].y === 0,
+  )
+
+  // 6c) زمان نمایش توضیح آموزشی — ذخیره، خواندن و مقدار نامعتبر
+  const baseMcq = {
+    stageId: stage.id,
+    prompt: 'Smoke mcq?',
+    explanation: 'توضیح آزمایشی',
+    image: up.path,
+    imageWidth: 1,
+    imageHeight: 1,
+    zones: [],
+    type: 'mcq',
+    options: ['a', 'b', 'c', 'd'],
+    correctIndex: 2,
+  }
+  const afterRes = await json(`/api/questions/${mcq.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ ...baseMcq, explanationMode: 'after' }),
+  })
+  check('update question with explanationMode=after', afterRes.ok === true)
+  const modeDetail = await json(`/api/questions/${mcq.id}`)
+  check(
+    'explanationMode round-trips as «after»',
+    modeDetail.question.explanationMode === 'after' &&
+      modeDetail.question.explanation === 'توضیح آزمایشی',
+  )
+
+  await json(`/api/questions/${mcq.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ ...baseMcq, explanationMode: 'whenever' }),
+  })
+  const junkDetail = await json(`/api/questions/${mcq.id}`)
+  check(
+    'unknown explanationMode falls back to «always»',
+    junkDetail.question.explanationMode === 'always',
+    junkDetail.question.explanationMode,
   )
 
   // 7) سؤال ویدیویی (video)

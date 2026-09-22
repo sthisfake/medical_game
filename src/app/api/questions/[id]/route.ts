@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { deleteQuestion, getQuestion, getStage, updateQuestion } from '@/lib/db'
 import { sanitizeLabels } from '@/lib/labels'
+import { parseExplanationMode } from '@/lib/explanation'
 import type { QuestionInput } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -13,6 +14,8 @@ function parseQuestionInput(body: unknown): QuestionInput | null {
   const stageId = typeof b.stageId === 'number' ? Math.round(b.stageId) : NaN
   const prompt = typeof b.prompt === 'string' ? b.prompt.trim() : ''
   const explanation = typeof b.explanation === 'string' ? b.explanation : ''
+  // زمان نمایش توضیح آموزشی — ناشناخته یا غایب = «همیشه» (رفتار قبلی)
+  const explanationMode = parseExplanationMode(b.explanationMode)
   const image = typeof b.image === 'string' ? b.image : ''
   const imageWidth = typeof b.imageWidth === 'number' ? Math.round(b.imageWidth) : 0
   const imageHeight = typeof b.imageHeight === 'number' ? Math.round(b.imageHeight) : 0
@@ -35,7 +38,7 @@ function parseQuestionInput(body: unknown): QuestionInput | null {
   }
   if (type === 'video' && !videoUrl) return null
 
-  return { stageId, prompt, explanation, image, imageWidth, imageHeight, zones, labels, type, options, correctIndex, videoUrl }
+  return { stageId, prompt, explanation, explanationMode, image, imageWidth, imageHeight, zones, labels, type, options, correctIndex, videoUrl }
 }
 
 export async function GET(_request: Request, ctx: Ctx) {

@@ -5,7 +5,15 @@ import { useRouter } from 'next/navigation'
 import { api } from '../../lib/api'
 import { toFa } from '../../lib/format'
 import { prepareImageForUpload } from '../../lib/image-resize'
-import type { AnswerZone, ImageLabel, Question, QuestionInput, QuestionType, Stage } from '../../types'
+import type {
+  AnswerZone,
+  ExplanationMode,
+  ImageLabel,
+  Question,
+  QuestionInput,
+  QuestionType,
+  Stage,
+} from '../../types'
 import { AdminShell } from './AdminShell'
 import { ZoneCanvas } from './ZoneCanvas'
 import { VideoPlayer } from '../VideoPlayer'
@@ -41,6 +49,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
   const [stageId, setStageId] = useState<number>(initialStageId ?? 0)
   const [prompt, setPrompt] = useState('')
   const [explanation, setExplanation] = useState('')
+  const [explanationMode, setExplanationMode] = useState<ExplanationMode>('always')
 
   // نوع سؤال و فیلدهای مخصوص هر نوع
   const [type, setType] = useState<QuestionType>('image')
@@ -95,6 +104,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
         setStageId(question.stageId)
         setPrompt(question.prompt)
         setExplanation(question.explanation)
+        setExplanationMode(question.explanationMode ?? 'always')
         setType(question.type)
         setImage(question.image)
         setImageWidth(question.imageWidth)
@@ -200,6 +210,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
       stageId,
       prompt: prompt.trim(),
       explanation: explanation.trim(),
+      explanationMode,
       image,
       imageWidth,
       imageHeight,
@@ -290,7 +301,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
           </label>
 
           <label className="field">
-            <span>توضیح آموزشی (اگر پر باشد، همیشه زیر متن سؤال نمایش داده می‌شود)</span>
+            <span>توضیح آموزشی (اختیاری — اگر خالی بماند هیچوقت نمایش داده نمی‌شود)</span>
             <textarea
               rows={4}
               value={explanation}
@@ -298,6 +309,40 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
               placeholder="توضیح کوتاه دربارهٔ پاسخ درست…"
             />
           </label>
+
+          <div className="field">
+            <span>زمان نمایش توضیح آموزشی</span>
+            <div className="mode-choice" role="radiogroup" aria-label="زمان نمایش توضیح آموزشی">
+              <label
+                className={`mode-choice__item${explanationMode === 'always' ? ' mode-choice__item--on' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="explanationMode"
+                  checked={explanationMode === 'always'}
+                  onChange={() => setExplanationMode('always')}
+                />
+                <span className="mode-choice__body">
+                  <b>همیشه (راهنما)</b>
+                  <em>از لحظهٔ نمایش سؤال دیده می‌شود و نقش راهنما دارد.</em>
+                </span>
+              </label>
+              <label
+                className={`mode-choice__item${explanationMode === 'after' ? ' mode-choice__item--on' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="explanationMode"
+                  checked={explanationMode === 'after'}
+                  onChange={() => setExplanationMode('after')}
+                />
+                <span className="mode-choice__body">
+                  <b>فقط بعد از پاسخ</b>
+                  <em>پس از پاسخ‌دادن نمایش داده می‌شود — درست، نادرست یا اتمام زمان.</em>
+                </span>
+              </label>
+            </div>
+          </div>
 
           {(type === 'image' || type === 'mcq') && (
             <div className="field">

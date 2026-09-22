@@ -8,6 +8,7 @@ import { toFa } from '../lib/format'
 import type { ActiveQuestion, Question, Stage, StageStats } from '../types'
 import { AnatomyImage } from './AnatomyImage'
 import { ImageLabels } from './ImageLabels'
+import { explanationVisible } from '../lib/explanation'
 import { ScoreBar } from './ScoreBar'
 import { TimerRing } from './TimerRing'
 import { VideoPlayer } from './VideoPlayer'
@@ -113,7 +114,8 @@ export function QuestionScreen({
   }
 
   const isMcq = question.type === 'mcq' || question.type === 'video'
-  const hasExplanation = (question.explanation ?? '').trim().length > 0
+  // توضیح آموزشی: بسته به انتخاب ادمین، راهنما (پیش از پاسخ) یا بازخورد (بعد از پاسخ)
+  const showExplanation = explanationVisible(question.explanation, question.explanationMode, !open)
 
   /**
    * بخشی از صفحه را تا بالای نوار پایین (شمارنده‌ها) در دید می‌آورد —
@@ -172,7 +174,7 @@ export function QuestionScreen({
         <TimerRing secondsLeft={remaining} totalSeconds={CONFIG.questionSeconds} />
       </header>
 
-      <main className={`question${hasExplanation ? ' question--has-explain' : ''}`}>
+      <main className={`question${showExplanation ? ' question--has-explain' : ''}`}>
         <div className="question__meta">
           <span className="pill">
             سؤال {toFa(questionIndex + 1)} از {toFa(stats.total)}
@@ -182,8 +184,8 @@ export function QuestionScreen({
 
         <h1 className="question__prompt">{question.prompt}</h1>
 
-        {/* توضیح آموزشی: اگر مقدار داشته باشد همیشه (از لحظهٔ نمایش سؤال) دیده می‌شود */}
-        {hasExplanation && (
+        {/* توضیح آموزشی: «همیشه» از لحظهٔ نمایش سؤال، «بعد از پاسخ» فقط پس از پاسخ‌دادن */}
+        {showExplanation && (
           <aside className="explain explain--inline card" aria-label="توضیح آموزشی">
             <h2>توضیح آموزشی</h2>
             <p>{question.explanation}</p>

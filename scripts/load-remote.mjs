@@ -52,6 +52,7 @@ const DDL = [
      stage_id     BIGINT NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
      prompt       TEXT   NOT NULL,
      explanation  TEXT   NOT NULL DEFAULT '',
+     explanation_mode TEXT NOT NULL DEFAULT 'always',
      image        TEXT   NOT NULL DEFAULT '',
      image_width  INTEGER NOT NULL DEFAULT 0,
      image_height INTEGER NOT NULL DEFAULT 0,
@@ -85,6 +86,7 @@ try {
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS correct_index INTEGER NOT NULL DEFAULT -1`,
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT ''`,
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS labels TEXT NOT NULL DEFAULT '[]'`,
+    `ALTER TABLE questions ADD COLUMN IF NOT EXISTS explanation_mode TEXT NOT NULL DEFAULT 'always'`,
   ]) {
     try {
       await q(alter)
@@ -149,13 +151,15 @@ try {
         typeof qq.labels === 'string' ? qq.labels : JSON.stringify(qq.labels ?? [])
       await q(
         `INSERT INTO questions
-           (stage_id, prompt, explanation, image, image_width, image_height, zones,
-            labels, type, options, correct_index, video_url, sort)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+           (stage_id, prompt, explanation, explanation_mode, image, image_width, image_height,
+            zones, labels, type, options, correct_index, video_url, sort)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
         [
           stageId,
           qq.prompt,
           qq.explanation ?? '',
+          // فقط دو مقدار معتبر است؛ هر چیز دیگر = «همیشه» (رفتار قبلی)
+          qq.explanation_mode === 'after' ? 'after' : 'always',
           image ?? '',
           qq.image_width ?? 0,
           qq.image_height ?? 0,

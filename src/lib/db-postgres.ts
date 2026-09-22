@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless'
-import type { AnswerZone, ImageLabel, Question, Stage } from '../types'
+import type { AnswerZone, ExplanationMode, ImageLabel, Question, Stage } from '../types'
+import { parseExplanationMode, DEFAULT_EXPLANATION_MODE } from './explanation'
 import { demoImageBytes, demoStage, demoSkeletonStages } from './seed-content'
 import { parseLabels, serializeLabels } from './labels'
 
@@ -39,6 +40,7 @@ interface DbQuestionRow {
   stage_id: number
   prompt: string
   explanation: string
+  explanation_mode: string
   image: string
   image_width: number
   image_height: number
@@ -82,6 +84,7 @@ function rowToQuestion(row: DbQuestionRow): Question {
     stageId: Number(row.stage_id),
     prompt: row.prompt,
     explanation: row.explanation,
+    explanationMode: parseExplanationMode(row.explanation_mode),
     image: row.image,
     imageWidth: row.image_width,
     imageHeight: row.image_height,
@@ -123,6 +126,7 @@ const DDL: string[] = [
      stage_id      BIGINT NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
      prompt        TEXT   NOT NULL,
      explanation   TEXT   NOT NULL DEFAULT '',
+     explanation_mode TEXT NOT NULL DEFAULT 'always',
      image         TEXT   NOT NULL DEFAULT '',
      image_width   INTEGER NOT NULL DEFAULT 0,
      image_height  INTEGER NOT NULL DEFAULT 0,
@@ -157,6 +161,8 @@ async function ensureSchema(): Promise<void> {
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT ''`,
     // برچسب‌های روی تصویر — افزودن ستون، بدون دست‌زدن به دادهٔ موجود
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS labels TEXT NOT NULL DEFAULT '[]'`,
+    // زمان نمایش توضیح آموزشی — پیش‌فرض «همیشه» = رفتار قبلی، بدون تغییر داده
+    `ALTER TABLE questions ADD COLUMN IF NOT EXISTS explanation_mode TEXT NOT NULL DEFAULT 'always'`,
   ]
   for (const alter of alters) {
     try {
@@ -308,6 +314,7 @@ export async function createQuestion(input: {
   stageId: number
   prompt: string
   explanation: string
+  explanationMode?: ExplanationMode
   image: string
   imageWidth: number
   imageHeight: number
@@ -321,13 +328,14 @@ export async function createQuestion(input: {
 }): Promise<number> {
   const rows = await q<{ id: number }>(
     `INSERT INTO questions
-       (stage_id, prompt, explanation, image, image_width, image_height, zones,
-        labels, type, options, correct_index, video_url, sort)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+       (stage_id, prompt, explanation, explanation_mode, image, image_width, image_height,
+        zones, labels, type, options, correct_index, video_url, sort)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
     [
       input.stageId,
       input.prompt,
       input.explanation,
+      input.explanationMode ?? DEFAULT_EXPLANATION_MODE,
       input.image,
       input.imageWidth,
       input.imageHeight,
@@ -349,6 +357,7 @@ export async function updateQuestion(
     stageId: number
     prompt: string
     explanation: string
+    explanationMode?: ExplanationMode
     image: string
     imageWidth: number
     imageHeight: number
@@ -364,14 +373,15 @@ export async function updateQuestion(
   if (prev && prev.image !== input.image) await deleteUploadedImage(prev.image)
   await q(
     `UPDATE questions
-     SET stage_id = $1, prompt = $2, explanation = $3, image = $4,
-         image_width = $5, image_height = $6, zones = $7, labels = $8,
-         type = $9, options = $10, correct_index = $11, video_url = $12
-     WHERE id = $13`,
+     SET stage_id = $1, prompt = $2, explanation = $3, explanation_mode = $4, image = $5,
+         image_width = $6, image_height = $7, zones = $8, labels = $9,
+         type = $10, options = $11, correct_index = $12, video_url = $13
+     WHERE id = $14`,
     [
       input.stageId,
       input.prompt,
       input.explanation,
+      input.explanationMode ?? DEFAULT_EXPLANATION_MODE,
       input.image,
       input.imageWidth,
       input.imageHeight,

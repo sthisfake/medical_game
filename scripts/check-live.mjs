@@ -92,6 +92,17 @@ if (all.length > 0) {
     `${choice.length - choiceNoLabels.length}/${choice.length}`,
   )
 
+  // زمان نمایش توضیح آموزشی: فقط «always» یا «after» معتبر است
+  const badMode = all.filter((q) => q.explanationMode !== 'always' && q.explanationMode !== 'after')
+  const afterCount = all.filter((q) => q.explanationMode === 'after').length
+  check(
+    'زمان نمایش توضیح آموزشی برای همهٔ سؤال‌ها معتبر است',
+    badMode.length === 0,
+    badMode.length
+      ? badMode.slice(0, 3).map((q) => q.prompt.slice(0, 20)).join(' | ')
+      : `${all.length - afterCount} «همیشه» ، ${afterCount} «بعد از پاسخ»`,
+  )
+
   const imageUrls = [...new Set(all.filter((q) => q.image).map((q) => q.image))]
   let brokenImages = []
   for (const u of imageUrls) {

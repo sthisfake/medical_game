@@ -53,6 +53,13 @@ export interface ImageLabel {
 export type QuestionType = 'image' | 'mcq' | 'video'
 
 /**
+ * زمان نمایش «توضیح آموزشی»:
+ *  - always: از لحظهٔ نمایش سؤال (نقش راهنما)
+ *  - after:  فقط بعد از پاسخ‌دادن به سؤال — درست، نادرست یا اتمام زمان
+ */
+export type ExplanationMode = 'always' | 'after'
+
+/**
  * یک سؤال (همان شکلی که از API/دیتابیس به کلاینت می‌رسد)
  *  - image: کلیک روی تصویر (ناحیه‌ها) — اگر چند ناحیهٔ درست باشد، باید همه کلیک شوند
  *  - mcq:   سه یا چهار گزینهٔ متنی، یک پاسخ درست
@@ -65,6 +72,8 @@ export interface Question {
   prompt: string
   /** توضیح آموزشی */
   explanation: string
+  /** چه زمانی نمایش داده شود: پیش از پاسخ (راهنما) یا فقط بعد از پاسخ */
+  explanationMode: ExplanationMode
   /** آدرس تصویر، مثل /api/uploads/12 (تصویر در دیتابیس ذخیره می‌شود) — فقط برای نوع image */
   image: string
   imageWidth: number
@@ -134,6 +143,7 @@ export interface QuestionInput {
   stageId: number
   prompt: string
   explanation: string
+  explanationMode: ExplanationMode
   image: string
   imageWidth: number
   imageHeight: number

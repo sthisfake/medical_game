@@ -1,7 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { AnswerZone, ImageLabel, Question, Stage } from '../types'
+import type { AnswerZone, ExplanationMode, ImageLabel, Question, Stage } from '../types'
+import { parseExplanationMode, DEFAULT_EXPLANATION_MODE } from './explanation'
 import { demoImageBytes, demoStage, demoSkeletonStages } from './seed-content'
 import { parseLabels, serializeLabels } from './labels'
 
@@ -27,6 +28,7 @@ interface DbQuestionRow {
   stage_id: number
   prompt: string
   explanation: string
+  explanation_mode: string
   image: string
   image_width: number
   image_height: number
@@ -80,6 +82,7 @@ function openDb(): DatabaseSync {
       stage_id      INTEGER NOT NULL REFERENCES stages(id) ON DELETE CASCADE,
       prompt        TEXT    NOT NULL,
       explanation   TEXT    NOT NULL DEFAULT '',
+      explanation_mode TEXT NOT NULL DEFAULT 'always',
       image         TEXT    NOT NULL DEFAULT '',
       image_width   INTEGER NOT NULL DEFAULT 0,
       image_height  INTEGER NOT NULL DEFAULT 0,
@@ -109,6 +112,8 @@ function openDb(): DatabaseSync {
     db.exec(`ALTER TABLE questions ADD COLUMN correct_index INTEGER NOT NULL DEFAULT -1`)
   if (!hasCol('video_url')) db.exec(`ALTER TABLE questions ADD COLUMN video_url TEXT NOT NULL DEFAULT ''`)
   if (!hasCol('labels')) db.exec(`ALTER TABLE questions ADD COLUMN labels TEXT NOT NULL DEFAULT '[]'`)
+  if (!hasCol('explanation_mode'))
+    db.exec(`ALTER TABLE questions ADD COLUMN explanation_mode TEXT NOT NULL DEFAULT 'always'`)
 
   return db
 }
@@ -150,6 +155,7 @@ function rowToQuestion(row: DbQuestionRow): Question {
     stageId: row.stage_id,
     prompt: row.prompt,
     explanation: row.explanation,
+    explanationMode: parseExplanationMode(row.explanation_mode),
     image: row.image,
     imageWidth: row.image_width,
     imageHeight: row.image_height,
@@ -241,6 +247,7 @@ export function createQuestion(input: {
   stageId: number
   prompt: string
   explanation: string
+  explanationMode?: ExplanationMode
   image: string
   imageWidth: number
   imageHeight: number
@@ -255,14 +262,15 @@ export function createQuestion(input: {
   const res = db
     .prepare(
       `INSERT INTO questions
-         (stage_id, prompt, explanation, image, image_width, image_height, zones,
-          labels, type, options, correct_index, video_url, sort)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (stage_id, prompt, explanation, explanation_mode, image, image_width, image_height,
+          zones, labels, type, options, correct_index, video_url, sort)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.stageId,
       input.prompt,
       input.explanation,
+      input.explanationMode ?? DEFAULT_EXPLANATION_MODE,
       input.image,
       input.imageWidth,
       input.imageHeight,
@@ -283,6 +291,7 @@ export function updateQuestion(
     stageId: number
     prompt: string
     explanation: string
+    explanationMode?: ExplanationMode
     image: string
     imageWidth: number
     imageHeight: number
@@ -298,7 +307,7 @@ export function updateQuestion(
   if (prev && prev.image !== input.image) deleteUploadedImage(prev.image)
   db.prepare(
     `UPDATE questions
-     SET stage_id = ?, prompt = ?, explanation = ?, image = ?,
+     SET stage_id = ?, prompt = ?, explanation = ?, explanation_mode = ?, image = ?,
          image_width = ?, image_height = ?, zones = ?, labels = ?,
          type = ?, options = ?, correct_index = ?, video_url = ?
      WHERE id = ?`,
@@ -306,6 +315,7 @@ export function updateQuestion(
     input.stageId,
     input.prompt,
     input.explanation,
+    input.explanationMode ?? DEFAULT_EXPLANATION_MODE,
     input.image,
     input.imageWidth,
     input.imageHeight,
