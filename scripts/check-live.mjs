@@ -125,6 +125,46 @@ if (all.length > 0) {
     stages.every((st) => st.questions.length > 0),
     stages.map((st) => `${st.title}:${st.questions.length}`).join(' '),
   )
+
+  /* ---- تنظیمات ایمیل و مسیر ارسال کارنامه ---- */
+  /* این بررسی‌ها فقط خواندنی‌اند یا درخواست‌های ناقصی می‌فرستند که        */
+  /* پیش از هر ارسالی رد می‌شوند؛ پس روی سایت واقعی بی‌خطرند.            */
+
+  const settingsRes = await fetch(`${base}/api/settings`)
+  check(
+    'تنظیمات ایمیل فقط با ورود مدیر خوانده می‌شود',
+    settingsRes.status === 401,
+    `HTTP ${settingsRes.status}`,
+  )
+
+  const submitJunk = await fetch(`${base}/api/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  check(
+    'مسیر ارسال کارنامه بدنهٔ ناقص را رد می‌کند',
+    submitJunk.status === 400,
+    `HTTP ${submitJunk.status}`,
+  )
+
+  const submitUnknown = await fetch(`${base}/api/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      student: { firstName: 'بازبینی', lastName: 'خودکار' },
+      runId: `check-live-${Date.now()}`,
+      overall: { total: 1, firstTryCorrect: 1, secondTryCorrect: 0, mistakes: 0, timedOut: 0 },
+      stages: [],
+      answers: [{ questionId: 99999999, prompt: 'بررسی', outcome: 'first', attempts: 1 }],
+      finishedAt: new Date().toISOString(),
+    }),
+  })
+  check(
+    'کارنامه با شناسهٔ سؤال ناشناخته رد می‌شود',
+    submitUnknown.status === 400,
+    `HTTP ${submitUnknown.status}`,
+  )
 }
 
 const failed = results.filter(([, ok]) => !ok)

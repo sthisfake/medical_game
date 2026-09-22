@@ -162,3 +162,69 @@ export interface StageInput {
   subtitle: string
   passRatio: number
 }
+
+/* ---------- کارنامهٔ پایان آزمون و اطلاع‌رسانی ---------- */
+
+/** سرانجام یک سؤال در کارنامهٔ پایان آزمون */
+export type AnswerOutcome = 'first' | 'second' | 'wrong' | 'timeout'
+
+/** یک ردیف از کارنامهٔ پاسخ‌های کاربر */
+export interface AnswerLogEntry {
+  questionId: number
+  prompt: string
+  outcome: AnswerOutcome
+  /** تعداد تلاش‌های مصرف‌شده */
+  attempts: number
+}
+
+/**
+ * نام و نام خانوادگیِ کاربر — فقط در حافظهٔ همان اجرا نگه داشته می‌شود و
+ * هیچ‌جا (نه دیتابیس، نه فایل) ذخیره نمی‌شود؛ فقط در ایمیل نتیجه می‌آید.
+ */
+export interface StudentName {
+  firstName: string
+  lastName: string
+}
+
+/** جمع‌بندی یک مرحله در کارنامه */
+export interface StageReport {
+  order: number
+  title: string
+  stats: StageStats
+}
+
+/** بدنهٔ ارسالی به /api/submit برای فرستادن ایمیل نتیجه */
+export interface ResultSubmission {
+  student: StudentName
+  /** شناسهٔ یکتای این اجرا — برای جلوگیری از ارسال تکراری */
+  runId: string
+  overall: StageStats
+  stages: StageReport[]
+  answers: AnswerLogEntry[]
+  /** زمان پایان آزمون (ISO) */
+  finishedAt: string
+}
+
+/** پاسخ /api/submit */
+export interface SubmitResponse {
+  ok: boolean
+  sent: boolean
+  reason?: string
+}
+
+/** پاسخ /api/settings (فقط برای مدیر) */
+export interface SettingsResponse {
+  /** نشانی تنظیم‌شدهٔ گیرندهٔ نتیجه — خالی یعنی تنظیم نشده */
+  notifyEmail: string
+  /** آیا ارسال ایمیل روی سرور پیکربندی شده است (کلید API و نشانی فرستنده) */
+  mailConfigured: boolean
+  /** نتیجهٔ آخرین ارسال آزمایشی (برای نمایش در پنل) */
+  lastTest: MailTestResult | null
+}
+
+/** نتیجهٔ آخرین ایمیل آزمایشی */
+export interface MailTestResult {
+  ok: boolean
+  at: string
+  detail: string
+}

@@ -101,6 +101,13 @@ function openDb(): DatabaseSync {
       content_type TEXT    NOT NULL DEFAULT 'image/jpeg',
       created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- تنظیمات کلید/مقدار (همتای جدول meta در PostgreSQL).
+    -- جدول تازه و خالی است؛ ساختنش به دادهٔ موجود کاری ندارد.
+    CREATE TABLE IF NOT EXISTS meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `)
 
   // ارتقای دیتابیس‌های قدیمی: ستون‌های انواع جدید سؤال
@@ -468,6 +475,26 @@ function runSeed(): void {
     }
     throw e
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* تنظیمات — جدول کلید/مقدار meta                                     */
+/* فقط همان یک کلید خوانده/نوشته می‌شود؛ هیچ سطر دیگری دست نمی‌خورد.   */
+/* ------------------------------------------------------------------ */
+
+export function getSetting(key: string): string | null {
+  const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as unknown as
+    | { value: string }
+    | undefined
+  return row ? row.value : null
+}
+
+export function setSetting(key: string, value: string): void {
+  // upsert روی یک کلید — بقیهٔ کلیدها دست‌نخورده می‌مانند
+  db.prepare(
+    `INSERT INTO meta (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+  ).run(key, value)
 }
 
 seedIfEmpty()

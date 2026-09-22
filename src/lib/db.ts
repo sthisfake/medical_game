@@ -39,6 +39,8 @@ interface Backend {
   deleteQuestion(questionId: number): Promise<void>
   saveUpload(dataBase64: string, contentType: string): Promise<SavedUpload>
   getUpload(uploadId: number): Promise<StoredUpload | null>
+  getSetting(key: string): Promise<string | null>
+  setSetting(key: string, value: string): Promise<void>
 }
 
 let implPromise: Promise<unknown> | null = null
@@ -120,4 +122,14 @@ export async function saveUpload(
 
 export async function getUpload(uploadId: number): Promise<StoredUpload | null> {
   return (await impl()).getUpload(uploadId)
+}
+
+/* ------------------------------ تنظیمات ----------------------------- */
+
+export async function getSetting(key: string): Promise<string | null> {
+  return (await impl()).getSetting(key)
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  return (await impl()).setSetting(key, value)
 }

@@ -6,6 +6,9 @@ import type { NextRequest } from 'next/server'
 /*   نام کاربری/گذرواژه به‌صورت پیش‌فرض: admin / admin                  */
 /*   در صورت نیاز می‌توان با متغیرهای محیطی ADMIN_USER و ADMIN_PASSWORD */
 /*   روی Vercel تغییرشان داد.                                          */
+/*                                                                     */
+/* تنها استثنا: POST /api/submit — کاربرِ آزمون (بدون ورود مدیر)        */
+/* کارنامهٔ پایان آزمون را می‌فرستد. فقط همین یک مسیر و فقط POST.       */
 /* ------------------------------------------------------------------ */
 
 const ADMIN_USER = process.env.ADMIN_USER || 'admin'
@@ -36,8 +39,13 @@ export function middleware(request: NextRequest) {
   // صفحه‌های پنل مدیریت + درخواست‌های تغییردهندهٔ داده
   const isAdminPage = pathname === '/admin' || pathname.startsWith('/admin/')
   const isMutation = pathname.startsWith('/api/') && MUTATING.has(request.method)
+  // تنظیمات: خواندنش هم باید محافظت شود (نشانی ایمیل مدیر داخلش است)
+  const isSettings = pathname === '/api/settings' || pathname.startsWith('/api/settings/')
+  // تنها نوشتنِ عمومی برنامه: کاربرِ آزمون کارنامهٔ پایان را می‌فرستد
+  const isPublicSubmit = pathname === '/api/submit' && request.method === 'POST'
 
-  if (!isAdminPage && !isMutation) return NextResponse.next()
+  if (isPublicSubmit) return NextResponse.next()
+  if (!isAdminPage && !isSettings && !isMutation) return NextResponse.next()
   if (authorized(request)) return NextResponse.next()
 
   return new NextResponse('دسترسی نیازمند ورود مدیر است.', {

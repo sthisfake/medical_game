@@ -4,12 +4,14 @@ import { Button } from './ui'
 
 interface FinalScreenProps {
   overall: StageStats
+  /** آیا کارنامه با ایمیل به مسئول آزمون فرستاده شد */
+  mailSent?: boolean
   onRestart: () => void
   onHome: () => void
 }
 
 /** صفحهٔ پایان: پس از گذراندن موفق همهٔ مراحل */
-export function FinalScreen({ overall, onRestart, onHome }: FinalScreenProps) {
+export function FinalScreen({ overall, mailSent = false, onRestart, onHome }: FinalScreenProps) {
   const pct =
     overall.total > 0 ? Math.round((overall.firstTryCorrect / overall.total) * 100) : 0
 
@@ -47,6 +49,10 @@ export function FinalScreen({ overall, onRestart, onHome }: FinalScreenProps) {
           از مجموع {toFa(overall.total)} سؤال، {toFa(overall.firstTryCorrect)} سؤال در تلاش اول
           به‌درستی پاسخ داده شد.
         </p>
+
+        {mailSent && (
+          <p className="result__mail">✓ کارنامهٔ شما برای مسئول آزمون ایمیل شد.</p>
+        )}
 
         <div className="result__actions result__actions--row">
           <Button onClick={onRestart} className="btn--lg">

@@ -447,3 +447,24 @@ export async function getUpload(uploadId: number): Promise<StoredUpload | null> 
     ? { id: Number(rows[0].id), data: rows[0].data, contentType: rows[0].content_type }
     : null
 }
+
+/* ------------------------------------------------------------------ */
+/* تنظیمات — جدول کلید/مقدار meta                                     */
+/*                                                                     */
+/* فقط همان یک کلید خوانده/نوشته می‌شود؛ هیچ جدول یا سطر دیگری دست     */
+/* نمی‌خورد و مقدار پیش‌فرضی هم تحمیل نمی‌شود تا رفتار فعلی حفظ شود.   */
+/* ------------------------------------------------------------------ */
+
+export async function getSetting(key: string): Promise<string | null> {
+  const rows = await q<{ value: string }>(`SELECT value FROM meta WHERE key = $1`, [key])
+  return rows.length > 0 ? rows[0].value : null
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  // upsert روی یک کلید — بقیهٔ کلیدها (مثل seeded) دست‌نخورده می‌مانند
+  await q(
+    `INSERT INTO meta (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [key, value],
+  )
+}

@@ -47,6 +47,7 @@ export function AdminShell({
           <nav className="admin__nav">
             <a href="/">بازی</a>
             <a href="/admin">مراحل</a>
+            <a href="/admin/settings">تنظیمات</a>
           </nav>
           {dbLabel && <span className="admin__db">{dbLabel}</span>}
         </div>

@@ -58,14 +58,12 @@ export function QuestionScreen({
   const correctZones = question.zones.filter((z) => z.correct !== false).length
   const multiClick = question.type === 'image' && correctZones > 1
 
-  // شروع مجدد زمان و پاک‌کردن علامت‌ها برای هر سؤال جدید
-  useEffect(() => {
-    setRemaining(CONFIG.questionSeconds)
-    setWrongMarkers([])
-    setCorrectMarkers([])
-    setBlankNotice(false)
-    setChosen(null)
-  }, [qKey])
+  /* زمان، علامت‌ها و گزینهٔ انتخابی برای هر سؤال از صفر شروع می‌شوند، چون
+     والد این بخش را با کلیدِ یکتا برای هر سؤال می‌سازد و نمونهٔ تازه‌ای
+     ساخته می‌شود. این بازنشانی نباید با useEffect انجام شود: تغییرِ زمان
+     یک به‌روزرسانیِ غیرهمزمان است، و اگر سؤال پیشین با اتمام زمان بسته شده
+     باشد، اثرِ «اتمام وقت» با مقدار کهنهٔ صفر در همان رندرِ سؤالِ تازه هم
+     اجرا می‌شد و سؤال بعدی را بی‌آنکه دیده شود بی‌پاسخ رد می‌کرد. */
 
   // شمارش معکوس — فقط وقتی سؤال باز است
   useEffect(() => {

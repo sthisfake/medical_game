@@ -4,6 +4,8 @@ import { useMemo, useReducer } from 'react'
 import { CONFIG } from '../config'
 import type {
   ActiveQuestion,
+  AnswerLogEntry,
+  AnswerOutcome,
   GamePhase,
   Question,
   Stage,
@@ -31,6 +33,10 @@ interface EngineState {
   stats: StageStats[]
   stageResult: StageResult | null
   overall: StageStats | null
+  /** شمارهٔ این اجرا — با هر «شروع» یک واحد بالا می‌رود (برای ارسال یک‌بارهٔ کارنامه) */
+  runId: number
+  /** کارنامهٔ پاسخ‌ها — فقط در حافظهٔ همین اجرا، هیچ‌جا ذخیره نمی‌شود */
+  answers: AnswerLogEntry[]
 }
 
 type Action =
@@ -59,7 +65,7 @@ const emptyStats = (total: number): StageStats => ({
 const runStats = (stages: Stage[]): StageStats[] =>
   stages.map((s) => emptyStats(s.questions.length))
 
-const freshRun = (phase: GamePhase, stages: Stage[]): EngineState => ({
+const freshRun = (phase: GamePhase, stages: Stage[], runId = 0): EngineState => ({
   phase,
   stageIndex: 0,
   questionIndex: 0,
@@ -67,7 +73,25 @@ const freshRun = (phase: GamePhase, stages: Stage[]): EngineState => ({
   stats: runStats(stages),
   stageResult: null,
   overall: null,
+  runId,
+  answers: [],
 })
+
+/** افزودن یک ردیف به کارنامهٔ پاسخ‌ها (بدون تغییر دیگر داده‌ها) */
+const appendAnswer = (
+  state: EngineState,
+  question: Question,
+  outcome: AnswerOutcome,
+  attempts: number,
+): AnswerLogEntry[] => [
+  ...state.answers,
+  {
+    questionId: question.id,
+    prompt: question.prompt,
+    outcome,
+    attempts: Math.max(0, Math.min(attempts, CONFIG.maxAttempts)),
+  },
+]
 
 const sumStats = (all: StageStats[]): StageStats =>
   all.reduce<StageStats>(
@@ -92,10 +116,11 @@ const makeReducer = (stages: Stage[]) =>
   (state: EngineState, action: Action): EngineState => {
     switch (action.type) {
       case 'START':
-        return freshRun('play', stages)
+        // اجرای تازه: شمارهٔ اجرا بالا می‌رود تا کارنامه یک‌بار فرستاده شود
+        return freshRun('play', stages, state.runId + 1)
 
       case 'BACK_TO_START':
-        return freshRun('start', stages)
+        return freshRun('start', stages, state.runId)
 
       case 'ATTEMPT': {
         if (state.phase !== 'play' || state.active.status !== 'open') return state
@@ -118,6 +143,12 @@ const makeReducer = (stages: Stage[]) =>
             ...state,
             active: { ...state.active, foundCorrect: found, status },
             stats: bumpStat(state.stats, state.stageIndex, firstTry ? 'firstTryCorrect' : 'secondTryCorrect'),
+            answers: appendAnswer(
+              state,
+              q,
+              firstTry ? 'first' : 'second',
+              CONFIG.maxAttempts - state.active.attemptsLeft + 1,
+            ),
           }
         }
 
@@ -127,6 +158,7 @@ const makeReducer = (stages: Stage[]) =>
             ...state,
             active: { ...state.active, attemptsLeft, status: 'failed', failReason: 'exhausted' },
             stats: bumpStat(state.stats, state.stageIndex, 'mistakes'),
+            answers: appendAnswer(state, q, 'wrong', CONFIG.maxAttempts),
           }
         }
         return { ...state, active: { ...state.active, attemptsLeft } }
@@ -134,6 +166,7 @@ const makeReducer = (stages: Stage[]) =>
 
       case 'EXPIRE': {
         if (state.phase !== 'play' || state.active.status !== 'open') return state
+        const q = stages[state.stageIndex].questions[state.questionIndex]
         return {
           ...state,
           active: { ...state.active, status: 'failed', failReason: 'timeout' },
@@ -142,6 +175,8 @@ const makeReducer = (stages: Stage[]) =>
             state.stageIndex,
             'timedOut',
           ),
+          // تعداد تلاش‌های مصرف‌شده پیش از اتمام زمان
+          answers: appendAnswer(state, q, 'timeout', CONFIG.maxAttempts - state.active.attemptsLeft),
         }
       }
 
@@ -167,7 +202,8 @@ const makeReducer = (stages: Stage[]) =>
 
       case 'STAGE_CONTINUE': {
         if (state.phase !== 'stage-result' || !state.stageResult) return state
-        if (!state.stageResult.passed) return freshRun('play', stages)
+        // شکست مرحله → شروع دوباره از مرحلهٔ ۱ (همان اجرا، کارنامه از نو)
+        if (!state.stageResult.passed) return freshRun('play', stages, state.runId)
 
         const nextIndex = state.stageIndex + 1
         const nextStage: Stage | undefined = stages[nextIndex]
@@ -197,6 +233,12 @@ export interface GameEngine {
   stats: StageStats
   stageResult: StageResult | null
   overall: StageStats | null
+  /** کارنامهٔ پاسخ‌های همین اجرا (برای ایمیل پایان آزمون) */
+  answers: AnswerLogEntry[]
+  /** آمار همهٔ مرحله‌ها (برای کارنامه) */
+  allStats: StageStats[]
+  /** شمارهٔ اجرای جاری — با هر شروع تازه عوض می‌شود */
+  runId: number
   startGame: () => void
   backToStart: () => void
   attempt: (correct: boolean) => void
@@ -226,6 +268,9 @@ export function useGameEngine(stages: Stage[]): GameEngine {
     stats: state.stageIndex < state.stats.length ? state.stats[state.stageIndex] : emptyStats(0),
     stageResult: state.stageResult,
     overall: state.overall,
+    answers: state.answers,
+    allStats: state.stats,
+    runId: state.runId,
     startGame: () => dispatch({ type: 'START' }),
     backToStart: () => dispatch({ type: 'BACK_TO_START' }),
     attempt: (correct: boolean) => dispatch({ type: 'ATTEMPT', correct }),

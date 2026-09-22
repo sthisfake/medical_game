@@ -4,7 +4,8 @@ import fs from 'node:fs'
 const base = process.env.SMOKE_BASE ?? 'http://localhost:3000'
 const results = []
 
-const check = (name, ok) => results.push([name, ok])
+const check = (name, ok, detail) =>
+  results.push([detail === undefined ? name : `${name} — ${detail}`, ok])
 
 // اعتبارنامهٔ پنل مدیریت (پیش‌فرض admin/admin — قابل تغییر با متغیرهای محیطی)
 const ADMIN_USER = process.env.ADMIN_USER ?? 'admin'
@@ -14,7 +15,8 @@ const authHeader = `Basic ${Buffer.from(`${ADMIN_USER}:${ADMIN_PASSWORD}`).toStr
 async function json(url, init) {
   const headers = new Headers(init?.headers)
   if (init?.body) headers.set('Content-Type', 'application/json')
-  if (init?.method && init.method !== 'GET') headers.set('Authorization', authHeader)
+  // اعتبارنامه همیشه فرستاده می‌شود: مسیرهای عمومی با fetch خام آزموده می‌شوند
+  headers.set('Authorization', authHeader)
   const res = await fetch(base + url, { ...init, headers, redirect: 'follow' })
   const text = await res.text()
   let data
@@ -22,6 +24,9 @@ async function json(url, init) {
   if (!res.ok) throw new Error(`HTTP ${res.status} on ${url}: ${String(text).slice(0, 200)}`)
   return data
 }
+
+/** نشانی گیرندهٔ نتیجه پیش از آزمون — برای بازگرداندن دقیق در پایان */
+let originalNotifyEmail = null
 
 try {
   // 0) محافظت از پنل مدیریت و تغییرات داده
@@ -288,8 +293,136 @@ try {
   check('delete stage cascades', !after.stages.some((s) => s.id === stage.id))
   const goneImg = await fetch(base + up.path)
   check('uploaded image removed', goneImg.status === 404)
+  // 9) تنظیمات اطلاع‌رسانی — خواندن و نوشتن فقط با ورود مدیر
+  const settingsNoAuth = await fetch(base + '/api/settings')
+  check('settings GET requires auth (401)', settingsNoAuth.status === 401)
+
+  const settingsPutNoAuth = await fetch(base + '/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notifyEmail: 'attacker@example.com' }),
+  })
+  check('settings PUT blocked without auth (401)', settingsPutNoAuth.status === 401)
+
+  const settingsBefore = await json('/api/settings')
+  originalNotifyEmail = settingsBefore.notifyEmail
+  check(
+    'settings expose notifyEmail + mailConfigured',
+    typeof settingsBefore.notifyEmail === 'string' &&
+      typeof settingsBefore.mailConfigured === 'boolean',
+  )
+
+  const badEmail = await fetch(base + '/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+    body: JSON.stringify({ notifyEmail: 'not-an-email' }),
+  })
+  check('invalid notify email rejected (400)', badEmail.status === 400)
+
+  const savedSettings = await json('/api/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ notifyEmail: 'smoke@example.com' }),
+  })
+  check('valid notify email saved', savedSettings.notifyEmail === 'smoke@example.com')
+  const rereadSettings = await json('/api/settings')
+  check('notify email persists in meta', rereadSettings.notifyEmail === 'smoke@example.com')
+  // وجود کلید در محیط سرور تعیین می‌کند؛ پیش‌فرض = بدون کلید
+  const expectConfigured = process.env.EXPECT_MAIL_CONFIGURED === '1'
+  check(
+    `mailConfigured گزارش درست می‌دهد (${expectConfigured ? 'با کلید' : 'بدون کلید'})`,
+    rereadSettings.mailConfigured === expectConfigured,
+    String(rereadSettings.mailConfigured),
+  )
+
+  // بازگرداندن مقدار اولیه (ممکن است نشانی واقعیِ کاربر باشد)
+  const restoredSettings = await json('/api/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ notifyEmail: originalNotifyEmail }),
+  })
+  check('notify email restored to original', restoredSettings.notifyEmail === originalNotifyEmail)
+
+  // از اینجا تا پایان بخش ۱۰ نشانی خالی می‌ماند تا هیچ ایمیلی بیرون نرود
+  await json('/api/settings', { method: 'PUT', body: JSON.stringify({ notifyEmail: '' }) })
+
+  // 10) /api/submit — تنها نوشتنِ عمومی برنامه (بدون ورود مدیر)
+  const firstQ = all.stages.flatMap((s) => s.questions)[0]
+  const s0 = { total: 1, firstTryCorrect: 1, secondTryCorrect: 0, mistakes: 0, timedOut: 0 }
+  const submitPayload = (over = {}) => ({
+    student: { firstName: 'آزمون', lastName: 'سنجش' },
+    runId: `smoke-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    overall: s0,
+    stages: [{ order: 1, title: 'مرحلهٔ آزمایشی', stats: s0 }],
+    answers: [{ questionId: firstQ.id, prompt: firstQ.prompt, outcome: 'first', attempts: 1 }],
+    finishedAt: new Date().toISOString(),
+    ...over,
+  })
+  const post = (body, headers = {}) =>
+    fetch(base + '/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+    })
+
+  const emptySubmit = await post({})
+  check(
+    'submit is public (400 from validation, not 401)',
+    emptySubmit.status === 400,
+    emptySubmit.status,
+  )
+
+  const badOutcome = await post(
+    submitPayload({
+      answers: [{ questionId: firstQ.id, prompt: 'p', outcome: 'maybe', attempts: 1 }],
+    }),
+  )
+  check('submit rejects unknown outcome (400)', badOutcome.status === 400)
+
+  const unknownId = await post(
+    submitPayload({
+      answers: [{ questionId: 99999999, prompt: 'p', outcome: 'first', attempts: 1 }],
+    }),
+  )
+  check('submit rejects unknown question id (400)', unknownId.status === 400)
+
+  const dupe = submitPayload()
+  await post(dupe)
+  const dupeSecond = await (await post(dupe)).json()
+  check(
+    'the same run is not emailed twice',
+    dupeSecond.sent === false && dupeSecond.reason === 'duplicate',
+  )
+
+  const okSubmit = await post(submitPayload())
+  const okBody = await okSubmit.json()
+  check(
+    'valid payload accepted; no recipient so nothing is sent',
+    okSubmit.status === 200 && okBody.ok === true && okBody.sent === false && okBody.reason === 'no-recipient',
+    JSON.stringify(okBody),
+  )
+
+  // محدودکنندهٔ نرخ با IP جعلیِ یکتا آزموده می‌شود تا سبد بقیه خراب نشود
+  const fakeIp = `203.0.113.${Math.floor(Math.random() * 200) + 1}`
+  let lastStatus = 0
+  for (let i = 0; i < 31; i += 1) {
+    const r = await post(submitPayload(), { 'x-real-ip': fakeIp })
+    lastStatus = r.status
+  }
+  check('submit rate limits a single IP (429)', lastStatus === 429, lastStatus)
 } catch (e) {
   check(`unexpected: ${e.message}`, false)
+}
+
+// بازگرداندن تنظیمات به حالت اولیه — حتی اگر آزمون نیمه‌کاره ماند
+try {
+  if (typeof originalNotifyEmail === 'string') {
+    await fetch(base + '/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+      body: JSON.stringify({ notifyEmail: originalNotifyEmail }),
+    })
+  }
+} catch {
+  /* ignore */
 }
 
 for (const [name, ok] of results) console.log(`${ok ? 'PASS' : 'FAIL'} : ${name}`)

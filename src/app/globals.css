@@ -245,6 +245,22 @@ a:hover {
   font-size: 0.85rem;
 }
 
+/* نام و نام خانوادگی پیش از شروع آزمون */
+.hero__form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.85rem;
+  max-width: 560px;
+  margin: 0 auto 1.4rem;
+  text-align: right;
+}
+
+.hero__privacy {
+  margin-top: 0.6rem;
+  color: var(--ink-3);
+  font-size: 0.78rem;
+}
+
 /* ---------------- عنوان بخش‌ها ---------------- */
 
 .section-title {
@@ -1265,6 +1281,13 @@ a:hover {
   margin-bottom: 1.6rem;
 }
 
+.result__mail {
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 1.6rem;
+}
+
 .result__actions {
   display: flex;
   flex-direction: column;
@@ -2106,6 +2129,129 @@ a:hover {
 
 .zone-item__del {
   margin-inline-start: auto;
+}
+
+/* ---------------- تنظیمات اطلاع‌رسانی (پنل مدیریت) ---------------- */
+
+.settings {
+  max-width: 780px;
+}
+
+.settings__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+
+.settings__lead {
+  color: var(--ink-2);
+  font-size: 0.88rem;
+  line-height: 2;
+  margin-bottom: 1.2rem;
+}
+
+.settings__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.settings__msg {
+  margin-top: 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.settings__msg--ok {
+  color: var(--accent);
+}
+
+.settings__msg--bad {
+  color: #b91c1c;
+}
+
+.settings__status {
+  margin-top: 1.1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  line-height: 2;
+}
+
+.settings__status--warn {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.settings__status code {
+  font-family: inherit;
+  font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  direction: ltr;
+  display: inline-block;
+}
+
+.settings__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 1.1rem;
+}
+
+.settings__hint {
+  color: var(--ink-3);
+  font-size: 0.8rem;
+}
+
+.settings__last {
+  margin-top: 0.9rem;
+  font-size: 0.84rem;
+  color: var(--ink-2);
+}
+
+.settings__ok {
+  color: var(--accent);
+}
+
+.settings__bad {
+  color: #b91c1c;
+}
+
+.settings__help {
+  margin-top: 1.6rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  line-height: 2;
+}
+
+.settings__help h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.5rem;
+}
+
+.settings__help ul {
+  padding-inline-start: 1.1rem;
+  margin-bottom: 0.7rem;
+}
+
+.settings__help li {
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .settings__row {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---------------- ریسپانسیو ---------------- */
