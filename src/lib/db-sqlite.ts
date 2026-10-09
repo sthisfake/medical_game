@@ -5,6 +5,7 @@ import type { AnswerZone, ExplanationMode, ImageLabel, Question, Stage } from '.
 import { parseExplanationMode, DEFAULT_EXPLANATION_MODE } from './explanation'
 import { demoImageBytes, demoStage, demoSkeletonStages } from './seed-content'
 import { parseLabels, serializeLabels } from './labels'
+import { DEFAULT_REVIEW_SECONDS } from './review'
 
 /* ------------------------------------------------------------------ */
 /* بک‌اند SQLite (محلی) — فقط وقتی DATABASE_URL تنظیم نشده استفاده می‌شود */
@@ -21,6 +22,9 @@ interface DbStageRow {
   title: string
   subtitle: string
   pass_ratio: number
+  review_image: string
+  review_text: string
+  review_seconds: number
 }
 
 interface DbQuestionRow {
@@ -74,7 +78,10 @@ function openDb(): DatabaseSync {
       icon       TEXT    NOT NULL DEFAULT '📘',
       title      TEXT    NOT NULL,
       subtitle   TEXT    NOT NULL DEFAULT '',
-      pass_ratio REAL    NOT NULL DEFAULT 0.5
+      pass_ratio REAL    NOT NULL DEFAULT 0.5,
+      review_image   TEXT    NOT NULL DEFAULT '',
+      review_text    TEXT    NOT NULL DEFAULT '',
+      review_seconds INTEGER NOT NULL DEFAULT 120
     );
 
     CREATE TABLE IF NOT EXISTS questions (
@@ -121,6 +128,18 @@ function openDb(): DatabaseSync {
   if (!hasCol('labels')) db.exec(`ALTER TABLE questions ADD COLUMN labels TEXT NOT NULL DEFAULT '[]'`)
   if (!hasCol('explanation_mode'))
     db.exec(`ALTER TABLE questions ADD COLUMN explanation_mode TEXT NOT NULL DEFAULT 'always'`)
+
+  // بازبینی پایان مرحله — ستون‌های تازه با پیش‌فرض خالی/۱۲۰ ثانیه.
+  // مرحله‌های موجود بازبینی ندارند، پس رفتار بازی تا وقتی ادمین چیزی نگذارد
+  // هیچ تغییری نمی‌کند. هیچ سطری بازنویسی یا پاک نمی‌شود.
+  const sCols = db.prepare('PRAGMA table_info(stages)').all() as unknown as { name: string }[]
+  const hasStageCol = (name: string) => sCols.some((c) => c.name === name)
+  if (!hasStageCol('review_image'))
+    db.exec(`ALTER TABLE stages ADD COLUMN review_image TEXT NOT NULL DEFAULT ''`)
+  if (!hasStageCol('review_text'))
+    db.exec(`ALTER TABLE stages ADD COLUMN review_text TEXT NOT NULL DEFAULT ''`)
+  if (!hasStageCol('review_seconds'))
+    db.exec(`ALTER TABLE stages ADD COLUMN review_seconds INTEGER NOT NULL DEFAULT 120`)
 
   return db
 }
@@ -183,6 +202,9 @@ function rowToStage(row: DbStageRow): Omit<Stage, 'questions'> {
     title: row.title,
     subtitle: row.subtitle,
     passRatio: row.pass_ratio,
+    reviewImage: row.review_image ?? '',
+    reviewText: row.review_text ?? '',
+    reviewSeconds: row.review_seconds ?? DEFAULT_REVIEW_SECONDS,
   }
 }
 
@@ -224,30 +246,73 @@ export function createStage(input: {
   title: string
   subtitle: string
   passRatio: number
+  reviewImage?: string
+  reviewText?: string
+  reviewSeconds?: number
 }): number {
   const res = db
     .prepare(
-      'INSERT INTO stages ("order", icon, title, subtitle, pass_ratio) VALUES (?, ?, ?, ?, ?)',
+      `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio, review_image, review_text, review_seconds)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(input.order, input.icon, input.title, input.subtitle, input.passRatio)
+    .run(
+      input.order,
+      input.icon,
+      input.title,
+      input.subtitle,
+      input.passRatio,
+      input.reviewImage ?? '',
+      input.reviewText ?? '',
+      input.reviewSeconds ?? DEFAULT_REVIEW_SECONDS,
+    )
   return Number(res.lastInsertRowid)
 }
 
 export function updateStage(
   stageId: number,
-  input: { order: number; icon: string; title: string; subtitle: string; passRatio: number },
+  input: {
+    order: number
+    icon: string
+    title: string
+    subtitle: string
+    passRatio: number
+    reviewImage?: string
+    reviewText?: string
+    reviewSeconds?: number
+  },
 ): void {
+  const prev = getStage(stageId)
   db.prepare(
-    'UPDATE stages SET "order" = ?, icon = ?, title = ?, subtitle = ?, pass_ratio = ? WHERE id = ?',
-  ).run(input.order, input.icon, input.title, input.subtitle, input.passRatio, stageId)
+    `UPDATE stages SET "order" = ?, icon = ?, title = ?, subtitle = ?, pass_ratio = ?,
+       review_image = ?, review_text = ?, review_seconds = ?
+     WHERE id = ?`,
+  ).run(
+    input.order,
+    input.icon,
+    input.title,
+    input.subtitle,
+    input.passRatio,
+    input.reviewImage ?? '',
+    input.reviewText ?? '',
+    input.reviewSeconds ?? DEFAULT_REVIEW_SECONDS,
+    stageId,
+  )
+  // تصویر بازبینیِ قبلی اگر دیگر جایی استفاده نمی‌شود، پاک شود
+  if (prev && prev.reviewImage && prev.reviewImage !== (input.reviewImage ?? '')) {
+    deleteUploadIfUnreferenced(prev.reviewImage)
+  }
 }
 
 export function deleteStage(stageId: number): void {
   const questions = db
     .prepare('SELECT image FROM questions WHERE stage_id = ?')
     .all(stageId) as unknown as { image: string }[]
+  const stageRow = db.prepare('SELECT review_image FROM stages WHERE id = ?').get(stageId) as
+    | { review_image: string }
+    | undefined
   db.prepare('DELETE FROM stages WHERE id = ?').run(stageId)
   for (const q of questions) deleteUploadedImage(q.image)
+  if (stageRow?.review_image) deleteUploadIfUnreferenced(stageRow.review_image)
 }
 
 export function createQuestion(input: {
@@ -371,6 +436,19 @@ export function deleteUploadedImage(imagePath: string): void {
   const id = parseUploadId(imagePath)
   if (id === null) return
   db.prepare('DELETE FROM uploads WHERE id = ?').run(id)
+}
+
+/**
+ * پاک‌کردن تصویر فقط اگر هیچ سؤال و هیچ بازبینیِ مرحله‌ای به آن ارجاع نداشته
+ * باشد. برای تصویر بازبینی از این استفاده می‌کنیم تا هرگز تصویری که هنوز
+ * جایی استفاده می‌شود پاک نشود.
+ */
+export function deleteUploadIfUnreferenced(imagePath: string): void {
+  const id = parseUploadId(imagePath)
+  if (id === null) return
+  const usedByQuestion = db.prepare('SELECT 1 FROM questions WHERE image = ? LIMIT 1').get(imagePath)
+  const usedByStage = db.prepare('SELECT 1 FROM stages WHERE review_image = ? LIMIT 1').get(imagePath)
+  if (!usedByQuestion && !usedByStage) deleteUploadedImage(imagePath)
 }
 
 export function saveUpload(dataBase64: string, contentType: string): SavedUpload {

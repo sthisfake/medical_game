@@ -109,6 +109,12 @@ export interface Stage {
   subtitle: string
   /** نسبت درستِ تلاش اول لازم برای قبولی (مثلاً ۰.۵) */
   passRatio: number
+  /** تصویر بازبینی پایان مرحله (اختیاری) — مثل تصاویر سؤال ذخیره می‌شود */
+  reviewImage: string
+  /** متن آموزشی بازبینی — دانشجو پس از قبولی مرحله می‌خواند */
+  reviewText: string
+  /** مدت نمایش بازبینی به ثانیه (پیش‌فرض ۱۲۰ = ۲ دقیقه) */
+  reviewSeconds: number
   questions: Question[]
 }
 
@@ -133,7 +139,7 @@ export interface ActiveQuestion {
   foundCorrect: number
 }
 
-export type GamePhase = 'start' | 'play' | 'stage-result' | 'final'
+export type GamePhase = 'start' | 'play' | 'stage-result' | 'stage-review' | 'final'
 
 export interface StageResult {
   stage: Stage
@@ -167,6 +173,9 @@ export interface StageInput {
   title: string
   subtitle: string
   passRatio: number
+  reviewImage: string
+  reviewText: string
+  reviewSeconds: number
 }
 
 /* ---------- کارنامهٔ پایان آزمون و اطلاع‌رسانی ---------- */

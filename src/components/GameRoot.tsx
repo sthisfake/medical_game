@@ -12,6 +12,7 @@ import type {
 import { FinalScreen } from './FinalScreen'
 import { QuestionScreen } from './QuestionScreen'
 import { StageResultScreen } from './StageResultScreen'
+import { StageReviewScreen } from './StageReviewScreen'
 import { StartScreen } from './StartScreen'
 
 /* ------------------------------------------------------------------ */
@@ -104,6 +105,17 @@ export function GameRoot({ stages }: { stages: Stage[] }) {
     case 'stage-result':
       if (!game.stageResult) return null
       return <StageResultScreen result={game.stageResult} onContinue={game.continueAfterStage} />
+
+    case 'stage-review':
+      if (!game.stage) return null
+      // کلید یکتا: هر بار بازبینی، شمارش معکوس از صفر شروع می‌شود
+      return (
+        <StageReviewScreen
+          key={`review-${runId}-${game.stage.id}`}
+          stage={game.stage}
+          onDone={game.reviewDone}
+        />
+      )
 
     case 'final':
       if (!game.overall) return null

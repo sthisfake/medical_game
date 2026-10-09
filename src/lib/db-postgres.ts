@@ -3,6 +3,7 @@ import type { AnswerZone, ExplanationMode, ImageLabel, Question, Stage } from '.
 import { parseExplanationMode, DEFAULT_EXPLANATION_MODE } from './explanation'
 import { demoImageBytes, demoStage, demoSkeletonStages } from './seed-content'
 import { parseLabels, serializeLabels } from './labels'
+import { DEFAULT_REVIEW_SECONDS } from './review'
 
 /* ------------------------------------------------------------------ */
 /* بک‌اند PostgreSQL — برای Vercel با Neon                             */
@@ -33,6 +34,9 @@ interface DbStageRow {
   title: string
   subtitle: string
   pass_ratio: number
+  review_image: string
+  review_text: string
+  review_seconds: number
 }
 
 interface DbQuestionRow {
@@ -105,6 +109,9 @@ function rowToStage(row: DbStageRow): Omit<Stage, 'questions'> {
     title: row.title,
     subtitle: row.subtitle,
     passRatio: row.pass_ratio,
+    reviewImage: row.review_image ?? '',
+    reviewText: row.review_text ?? '',
+    reviewSeconds: row.review_seconds ?? DEFAULT_REVIEW_SECONDS,
   }
 }
 
@@ -119,7 +126,10 @@ const DDL: string[] = [
      icon       TEXT    NOT NULL DEFAULT '📘',
      title      TEXT    NOT NULL,
      subtitle   TEXT    NOT NULL DEFAULT '',
-     pass_ratio DOUBLE PRECISION NOT NULL DEFAULT 0.5
+     pass_ratio DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+     review_image   TEXT    NOT NULL DEFAULT '',
+     review_text    TEXT    NOT NULL DEFAULT '',
+     review_seconds INTEGER NOT NULL DEFAULT 120
    )`,
   `CREATE TABLE IF NOT EXISTS questions (
      id            BIGSERIAL PRIMARY KEY,
@@ -163,6 +173,12 @@ async function ensureSchema(): Promise<void> {
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS labels TEXT NOT NULL DEFAULT '[]'`,
     // زمان نمایش توضیح آموزشی — پیش‌فرض «همیشه» = رفتار قبلی، بدون تغییر داده
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS explanation_mode TEXT NOT NULL DEFAULT 'always'`,
+    // بازبینی پایان مرحله — ستون‌های تازه با مقدار پیش‌فرض خالی/۱۲۰ ثانیه.
+    // مرحله‌های موجود بازبینی ندارند، پس رفتار بازی تا وقتی ادمین چیزی
+    // نگذارد هیچ تغییری نمی‌کند. هیچ سطری بازنویسی یا پاک نمی‌شود.
+    `ALTER TABLE stages ADD COLUMN IF NOT EXISTS review_image TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE stages ADD COLUMN IF NOT EXISTS review_text TEXT NOT NULL DEFAULT ''`,
+    `ALTER TABLE stages ADD COLUMN IF NOT EXISTS review_seconds INTEGER NOT NULL DEFAULT 120`,
   ]
   for (const alter of alters) {
     try {
@@ -283,31 +299,75 @@ export async function createStage(input: {
   title: string
   subtitle: string
   passRatio: number
+  reviewImage?: string
+  reviewText?: string
+  reviewSeconds?: number
 }): Promise<number> {
   const rows = await q<{ id: number }>(
-    `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio)
-     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-    [input.order, input.icon, input.title, input.subtitle, input.passRatio],
+    `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio, review_image, review_text, review_seconds)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [
+      input.order,
+      input.icon,
+      input.title,
+      input.subtitle,
+      input.passRatio,
+      input.reviewImage ?? '',
+      input.reviewText ?? '',
+      input.reviewSeconds ?? DEFAULT_REVIEW_SECONDS,
+    ],
   )
   return Number(rows[0].id)
 }
 
 export async function updateStage(
   stageId: number,
-  input: { order: number; icon: string; title: string; subtitle: string; passRatio: number },
+  input: {
+    order: number
+    icon: string
+    title: string
+    subtitle: string
+    passRatio: number
+    reviewImage?: string
+    reviewText?: string
+    reviewSeconds?: number
+  },
 ): Promise<void> {
+  const prev = await getStage(stageId)
   await q(
-    `UPDATE stages SET "order" = $1, icon = $2, title = $3, subtitle = $4, pass_ratio = $5 WHERE id = $6`,
-    [input.order, input.icon, input.title, input.subtitle, input.passRatio, stageId],
+    `UPDATE stages SET "order" = $1, icon = $2, title = $3, subtitle = $4, pass_ratio = $5,
+       review_image = $6, review_text = $7, review_seconds = $8
+     WHERE id = $9`,
+    [
+      input.order,
+      input.icon,
+      input.title,
+      input.subtitle,
+      input.passRatio,
+      input.reviewImage ?? '',
+      input.reviewText ?? '',
+      input.reviewSeconds ?? DEFAULT_REVIEW_SECONDS,
+      stageId,
+    ],
   )
+  // تصویر بازبینیِ قبلی اگر دیگر جایی استفاده نمی‌شود، پاک شود
+  if (prev && prev.reviewImage && prev.reviewImage !== (input.reviewImage ?? '')) {
+    await deleteUploadIfUnreferenced(prev.reviewImage)
+  }
 }
 
 export async function deleteStage(stageId: number): Promise<void> {
   const questions = await q<{ image: string }>(`SELECT image FROM questions WHERE stage_id = $1`, [
     stageId,
   ])
+  const stageRows = await q<{ review_image: string }>(
+    `SELECT review_image FROM stages WHERE id = $1`,
+    [stageId],
+  )
   await q(`DELETE FROM stages WHERE id = $1`, [stageId])
   for (const question of questions) await deleteUploadedImage(question.image)
+  const reviewImage = stageRows[0]?.review_image ?? ''
+  if (reviewImage) await deleteUploadIfUnreferenced(reviewImage)
 }
 
 export async function createQuestion(input: {
@@ -427,6 +487,24 @@ export async function deleteUploadedImage(imagePath: string): Promise<void> {
   const id = parseUploadId(imagePath)
   if (id === null) return
   await q(`DELETE FROM uploads WHERE id = $1`, [id])
+}
+
+/**
+ * پاک‌کردن تصویر فقط اگر هیچ سؤال و هیچ بازبینیِ مرحله‌ای به آن ارجاع نداشته
+ * باشد. برای تصویر بازبینی از این استفاده می‌کنیم تا هرگز تصویری که هنوز
+ * جایی استفاده می‌شود پاک نشود.
+ */
+async function deleteUploadIfUnreferenced(imagePath: string): Promise<void> {
+  const id = parseUploadId(imagePath)
+  if (id === null) return
+  const used = await q<{ one: number }>(
+    `SELECT 1 AS one FROM questions WHERE image = $1
+     UNION ALL
+     SELECT 1 AS one FROM stages WHERE review_image = $1
+     LIMIT 1`,
+    [imagePath],
+  )
+  if (used.length === 0) await deleteUploadedImage(imagePath)
 }
 
 export async function saveUpload(dataBase64: string, contentType: string): Promise<SavedUpload> {

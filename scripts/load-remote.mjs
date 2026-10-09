@@ -45,7 +45,10 @@ const DDL = [
      icon       TEXT    NOT NULL DEFAULT '📘',
      title      TEXT    NOT NULL,
      subtitle   TEXT    NOT NULL DEFAULT '',
-     pass_ratio DOUBLE PRECISION NOT NULL DEFAULT 0.5
+     pass_ratio DOUBLE PRECISION NOT NULL DEFAULT 0.5,
+     review_image   TEXT    NOT NULL DEFAULT '',
+     review_text    TEXT    NOT NULL DEFAULT '',
+     review_seconds INTEGER NOT NULL DEFAULT 120
    )`,
   `CREATE TABLE IF NOT EXISTS questions (
      id           BIGSERIAL PRIMARY KEY,
@@ -134,10 +137,23 @@ try {
 
   let qCount = 0
   for (const st of snap.stages ?? []) {
+    // تصویر بازبینی هم مثل تصویر سؤال به رکورد آپلودِ تازه نگاشت می‌شود
+    const rm = /\/api\/uploads\/(\d+)/.exec(st.review_image ?? '')
+    const reviewImage =
+      rm && imageMap.has(Number(rm[1])) ? imageMap.get(Number(rm[1])) : st.review_image ?? ''
     const ins = await q(
-      `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [st.order, st.icon, st.title, st.subtitle ?? '', st.pass_ratio ?? 0.5],
+      `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio, review_image, review_text, review_seconds)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [
+        st.order,
+        st.icon,
+        st.title,
+        st.subtitle ?? '',
+        st.pass_ratio ?? 0.5,
+        reviewImage,
+        st.review_text ?? '',
+        st.review_seconds ?? 120,
+      ],
     )
     const stageId = Number(ins[0].id)
     for (const qq of st.questions ?? []) {

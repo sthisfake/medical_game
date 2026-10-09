@@ -138,6 +138,40 @@ if (all.length > 0) {
     stages.map((st) => `${st.title}:${st.questions.length}`).join(' '),
   )
 
+  /* ---- بازبینی پایان مرحله (تصویر + متن + مدت زمان) ---- */
+  /* بازهٔ مجاز مثل src/lib/review.ts: بین ۵ و ۹۰۰ ثانیه. اگر نسخهٔ منتشرشده
+     هنوز این فیلد را ندارد، بررسی بی‌خطر رد می‌شود. */
+  const withReview = stages.filter(
+    (st) => st.reviewImage || (st.reviewText ?? '').trim() !== '',
+  )
+  const published = stages.some((st) => st.reviewSeconds !== undefined || st.reviewImage !== undefined)
+  const badSeconds = stages.filter(
+    (st) =>
+      st.reviewSeconds !== undefined &&
+      !(typeof st.reviewSeconds === 'number' && st.reviewSeconds >= 5 && st.reviewSeconds <= 900),
+  )
+  check(
+    'مدت بازبینی هر مرحله معتبر است',
+    badSeconds.length === 0,
+    badSeconds.length
+      ? badSeconds.map((st) => `${st.title}:${st.reviewSeconds}`).join(' | ')
+      : published
+        ? `${withReview.length} مرحله بازبینی دارد از ${stages.length}`
+        : 'این نسخه هنوز بازبینی ندارد',
+  )
+
+  const reviewUrls = [...new Set(withReview.filter((st) => st.reviewImage).map((st) => st.reviewImage))]
+  const brokenReview = []
+  for (const u of reviewUrls) {
+    const { status, type } = await get(u)
+    if (status !== 200 || !type.startsWith('image/')) brokenReview.push(`${u} → ${status}`)
+  }
+  check(
+    `تصویر بازبینی مرحله‌ها در دسترس است (${reviewUrls.length})`,
+    brokenReview.length === 0,
+    brokenReview.slice(0, 3).join(' | '),
+  )
+
   /* ---- تنظیمات ایمیل و مسیر ارسال کارنامه ---- */
   /* این بررسی‌ها فقط خواندنی‌اند یا درخواست‌های ناقصی می‌فرستند که        */
   /* پیش از هر ارسالی رد می‌شوند؛ پس روی سایت واقعی بی‌خطرند.            */

@@ -2,6 +2,7 @@
 
 import { useMemo, useReducer } from 'react'
 import { CONFIG } from '../config'
+import { stageHasReview } from '../lib/review'
 import type {
   ActiveQuestion,
   AnswerLogEntry,
@@ -46,6 +47,7 @@ type Action =
   | { type: 'EXPIRE' }
   | { type: 'NEXT' }
   | { type: 'STAGE_CONTINUE' }
+  | { type: 'REVIEW_DONE' }
 
 const freshActive = (): ActiveQuestion => ({
   attemptsLeft: CONFIG.maxAttempts,
@@ -110,6 +112,27 @@ const bumpStat = (stats: StageStats[], index: number, field: keyof StageStats): 
   const copy = stats.slice()
   copy[index] = { ...target, [field]: target[field] + 1 }
   return copy
+}
+
+/**
+ * رفتن به مرحلهٔ بعد یا پایان آزمون.
+ * مشترک بین «ادامهٔ مرحله» و «پایان بازبینی» تا رفتار یکی بماند.
+ */
+const goToNextStage = (state: EngineState, stages: Stage[]): EngineState => {
+  const nextIndex = state.stageIndex + 1
+  const nextStage: Stage | undefined = stages[nextIndex]
+  if (!nextStage || nextStage.questions.length === 0) {
+    return { ...state, phase: 'final', overall: sumStats(state.stats) }
+  }
+
+  return {
+    ...state,
+    phase: 'play',
+    stageIndex: nextIndex,
+    questionIndex: 0,
+    active: freshActive(),
+    stageResult: null,
+  }
 }
 
 const makeReducer = (stages: Stage[]) =>
@@ -205,20 +228,17 @@ const makeReducer = (stages: Stage[]) =>
         // شکست مرحله → شروع دوباره از مرحلهٔ ۱ (همان اجرا، کارنامه از نو)
         if (!state.stageResult.passed) return freshRun('play', stages, state.runId)
 
-        const nextIndex = state.stageIndex + 1
-        const nextStage: Stage | undefined = stages[nextIndex]
-        if (!nextStage || nextStage.questions.length === 0) {
-          return { ...state, phase: 'final', overall: sumStats(state.stats) }
-        }
+        // مرحلهٔ قبول‌شده که بازبینی دارد → اول بازبینی، بعد مرحلهٔ بعد
+        const done = stages[state.stageIndex]
+        if (done && stageHasReview(done)) return { ...state, phase: 'stage-review' }
 
-        return {
-          ...state,
-          phase: 'play',
-          stageIndex: nextIndex,
-          questionIndex: 0,
-          active: freshActive(),
-          stageResult: null,
-        }
+        return goToNextStage(state, stages)
+      }
+
+      case 'REVIEW_DONE': {
+        // بازبینی تمام شد (خوانده شد یا رد شد) → مرحلهٔ بعد یا کارنامهٔ پایانی
+        if (state.phase !== 'stage-review') return state
+        return goToNextStage(state, stages)
       }
     }
   }
@@ -245,6 +265,8 @@ export interface GameEngine {
   expire: () => void
   next: () => void
   continueAfterStage: () => void
+  /** پایان بازبینی مرحله (خوانده‌شدن یا رد‌کردن) */
+  reviewDone: () => void
 }
 
 export function useGameEngine(stages: Stage[]): GameEngine {
@@ -277,5 +299,6 @@ export function useGameEngine(stages: Stage[]): GameEngine {
     expire: () => dispatch({ type: 'EXPIRE' }),
     next: () => dispatch({ type: 'NEXT' }),
     continueAfterStage: () => dispatch({ type: 'STAGE_CONTINUE' }),
+    reviewDone: () => dispatch({ type: 'REVIEW_DONE' }),
   }
 }

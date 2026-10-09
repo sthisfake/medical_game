@@ -108,6 +108,63 @@ try {
   })
   check('create stage', stage.ok === true && stage.id > 0)
 
+  // 3b) بازبینی پایان مرحله — تصویر، متن و مدت زمان
+  const freshStage = (await json(`/api/stages/${stage.id}`)).stage
+  check(
+    'a new stage has an empty review with the default time',
+    freshStage.reviewImage === '' && freshStage.reviewText === '' && freshStage.reviewSeconds === 120,
+    JSON.stringify({
+      img: freshStage.reviewImage,
+      txt: freshStage.reviewText,
+      sec: freshStage.reviewSeconds,
+    }),
+  )
+
+  const putStage = (extra) =>
+    json(`/api/stages/${stage.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        order: 9,
+        icon: 'T',
+        title: 'Smoke Test Stage',
+        subtitle: '',
+        passRatio: 0.5,
+        ...extra,
+      }),
+    })
+
+  await putStage({ reviewImage: up.path, reviewText: 'خط اول\nخط دوم', reviewSeconds: 45 })
+  const withReview = (await json(`/api/stages/${stage.id}`)).stage
+  check(
+    'review image, text and seconds round-trip',
+    withReview.reviewImage === up.path &&
+      withReview.reviewText === 'خط اول\nخط دوم' &&
+      withReview.reviewSeconds === 45,
+    JSON.stringify({
+      img: withReview.reviewImage,
+      txt: withReview.reviewText,
+      sec: withReview.reviewSeconds,
+    }),
+  )
+
+  // مدت زمان خیلی بزرگ به سقف محدود می‌شود
+  await putStage({ reviewImage: '', reviewText: '', reviewSeconds: 99999 })
+  const clamped = (await json(`/api/stages/${stage.id}`)).stage
+  check('review seconds are clamped to the maximum', clamped.reviewSeconds === 900, `${clamped.reviewSeconds}`)
+
+  // مقدار نامعتبر → مقدار پیش‌فرض
+  await putStage({ reviewImage: '', reviewText: '', reviewSeconds: 'not-a-number' })
+  const fallback = (await json(`/api/stages/${stage.id}`)).stage
+  check(
+    'invalid review seconds fall back to the default',
+    fallback.reviewSeconds === 120,
+    `${fallback.reviewSeconds}`,
+  )
+  check(
+    'clearing the review empties image and text',
+    fallback.reviewImage === '' && fallback.reviewText === '',
+  )
+
   // 4) ساخت سؤال با دو گزینه: یکی پاسخِ درست، یکی نادرست
   const q1 = {
     stageId: stage.id,

@@ -2535,6 +2535,168 @@ a:hover {
   .admin__back {
     justify-self: start;
   }
+
+  /* --- بازبینی پایان مرحله --- */
+  .review__head {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .review__figure {
+    padding: 0.4rem;
+  }
+
+  .review__img {
+    max-height: min(42vh, 360px);
+    max-height: min(42dvh, 360px);
+  }
+
+  .review__actions .btn {
+    width: 100%;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* بازبینی پایان مرحله — تصویر + متن آموزشی، با شمارش معکوس           */
+/* ------------------------------------------------------------------ */
+
+.screen--review {
+  align-items: flex-start;
+  padding: 1.2rem 1rem 3rem;
+}
+
+.review {
+  width: min(900px, 100%);
+  border-radius: var(--r-lg);
+  padding: clamp(1.1rem, 3vw, 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.review__head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.review__kicker {
+  color: var(--accent-deep);
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.review__title {
+  font-size: clamp(1.15rem, 3.4vw, 1.5rem);
+  color: var(--ink);
+  margin-bottom: 0.45rem;
+}
+
+.review__hint {
+  color: var(--ink-2);
+  font-size: 0.86rem;
+  line-height: 2;
+  margin: 0;
+}
+
+.review__clock {
+  color: var(--accent-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.review__figure {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+
+.review__img {
+  display: block;
+  max-width: 100%;
+  max-height: min(56vh, 520px);
+  max-height: min(56dvh, 520px);
+  width: auto;
+  height: auto;
+  border-radius: var(--r-sm);
+  object-fit: contain;
+}
+
+.review__text {
+  white-space: pre-line;
+  color: var(--ink);
+  font-size: 0.98rem;
+  line-height: 2.1;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+}
+
+.review__actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 0.2rem;
+}
+
+/* --- تنظیمات بازبینی در پنل مدیریت --- */
+
+.stage-review-field {
+  margin-top: 0.4rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.stage-review-field > span {
+  color: var(--accent-deep);
+  font-weight: 700;
+}
+
+.field__note {
+  color: var(--ink-3);
+  font-size: 0.78rem;
+  line-height: 1.9;
+  margin: 0.15rem 0 0;
+}
+
+.review-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.review-admin__thumb {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.review-admin__empty {
+  display: grid;
+  place-items: center;
+  min-height: 88px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--ink-3);
+  font-size: 0.84rem;
+}
+
+.review-admin__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
 }
 
 /* گوشی در حالت افقی: ارتفاع کم است، تصویر هم کوتاه‌تر می‌شود */
@@ -2554,6 +2716,7 @@ a:hover {
 @supports (height: 100dvh) {
   body,
   .screen--result,
+  .screen--review,
   .admin {
     min-height: 100dvh;
   }

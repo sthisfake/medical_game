@@ -19,8 +19,24 @@ if (!fs.existsSync(dbPath)) {
 }
 
 const db = new DatabaseSync(dbPath)
+
+// ستون‌های تازهٔ بازبینی پایان مرحله — اگر دیتابیس قدیمی باشد اینجا اضافه
+// می‌شوند (همان کارِ افزایشیِ خود برنامه: هیچ داده‌ای پاک یا بازنویسی نمی‌شود).
+const stageCols = db.prepare('PRAGMA table_info(stages)').all().map((c) => c.name)
+for (const [name, ddl] of [
+  ['review_image', `ALTER TABLE stages ADD COLUMN review_image TEXT NOT NULL DEFAULT ''`],
+  ['review_text', `ALTER TABLE stages ADD COLUMN review_text TEXT NOT NULL DEFAULT ''`],
+  ['review_seconds', `ALTER TABLE stages ADD COLUMN review_seconds INTEGER NOT NULL DEFAULT 120`],
+]) {
+  if (!stageCols.includes(name)) db.exec(ddl)
+}
+
 const stages = db
-  .prepare('SELECT id, "order", icon, title, subtitle, pass_ratio FROM stages ORDER BY "order", id')
+  .prepare(
+    `SELECT id, "order", icon, title, subtitle, pass_ratio,
+            review_image, review_text, review_seconds
+     FROM stages ORDER BY "order", id`,
+  )
   .all()
 const uploads = db.prepare('SELECT id, data, content_type FROM uploads ORDER BY id').all()
 
