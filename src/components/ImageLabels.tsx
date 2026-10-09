@@ -39,6 +39,8 @@ export function ImageLabels({
               'imglabel',
               below ? 'imglabel--below' : '',
               edge ? `imglabel--${edge}` : '',
+              /* برچسبِ پاسخ درست سبز دیده می‌شود — هم در بازی و هم در پنل */
+              label.correct ? 'imglabel--correct' : '',
               editing && selected === i ? 'imglabel--on' : '',
               editing && !label.text ? 'imglabel--empty' : '',
             ]

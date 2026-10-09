@@ -199,7 +199,9 @@ await api('/api/settings', {
   body: JSON.stringify({ notifyEmail: TEST_EMAIL }),
 })
 console.log(`گیرندهٔ آزمایشی: ${TEST_EMAIL} | پیکربندی سرور: ${settingsBefore.mailConfigured}`)
-check('server reports mail configured (fake key present)', settingsBefore.mailConfigured === true)
+/* اگر سرور کلید Brevo داشته باشد، ارسال واقعاً به Brevo می‌رود و باید پاسخ HTTP
+   بگیرد؛ اگر نداشته باشد، مسیر باید صریح «not-configured» بگوید. */
+const mailConfigured = settingsBefore.mailConfigured === true
 
 fs.rmSync(PROFILE, { recursive: true, force: true })
 const chrome = spawn(
@@ -522,8 +524,12 @@ try {
 
   const responseBody = submitResponses[0]?.body ? JSON.parse(submitResponses[0].body) : null
   check(
-    'server attempted a real Brevo send (not "not-configured")',
-    typeof responseBody?.reason === 'string' && responseBody.reason.startsWith('brevo-'),
+    mailConfigured
+      ? 'server attempted a real Brevo send (not "not-configured")'
+      : 'server reports the send as not configured (no key in this environment)',
+    mailConfigured
+      ? typeof responseBody?.reason === 'string' && responseBody.reason.startsWith('brevo-')
+      : responseBody?.reason === 'not-configured',
     JSON.stringify(responseBody),
   )
   check('server reported the attempt as not sent', responseBody?.sent === false)

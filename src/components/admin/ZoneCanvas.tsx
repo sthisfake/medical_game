@@ -270,6 +270,20 @@ export function ZoneCanvas({
     setSelectedLabel(null)
   }
 
+  /**
+   * نشانهٔ «پاسخ درست» روی برچسب (در بازی سبز می‌شود).
+   * هنگام خاموش‌کردن، کلید کامل حذف می‌شود تا شکلِ داده مثل قبل بماند.
+   */
+  const toggleLabelCorrect = (index: number) => {
+    setLabels(
+      labels.map((l, i) => {
+        if (i !== index) return l
+        if (l.correct) return { text: l.text, x: l.x, y: l.y }
+        return { ...l, correct: true }
+      }),
+    )
+  }
+
   return (
     <div className="zone-editor">
       <div className="zone-editor__toolbar">
@@ -475,7 +489,9 @@ export function ZoneCanvas({
           <p className="zone-list-note">
             <b>برچسب‌های روی تصویر</b> — اختیاری. این متن‌ها در بازی <b>فقط بعد از پاسخ‌دادن</b> به
             سؤال (درست یا نادرست) روی تصویر ظاهر می‌شوند و جای آناتومی را نشان می‌دهند. با ابزار
-            «🏷 برچسب» روی تصویر کلیک کنید و متنش را اینجا بنویسید.
+            «🏷 برچسب» روی تصویر کلیک کنید و متنش را اینجا بنویسید. برچسبی که{' '}
+            <b>«پاسخ درست»</b> علامت بخورد در بازی <b>سبز</b> نشان داده می‌شود؛ می‌توانید یکی یا
+            چند برچسب را علامت بزنید.
           </p>
 
           <div className="label-list">
@@ -499,6 +515,18 @@ export function ZoneCanvas({
                 <span className="label-item__pos">
                   {Math.round(label.x * 100)}٪ ، {Math.round(label.y * 100)}٪
                 </span>
+                <button
+                  type="button"
+                  className={`label-item__correct${label.correct ? ' label-item__correct--on' : ''}`}
+                  aria-pressed={!!label.correct}
+                  title="این برچسب متنِ پاسخ درست است و در بازی سبز نشان داده می‌شود"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleLabelCorrect(i)
+                  }}
+                >
+                  ✓ پاسخ درست
+                </button>
                 <button
                   className="btn-link btn-link--danger"
                   onClick={(e) => {

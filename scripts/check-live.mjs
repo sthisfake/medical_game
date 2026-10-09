@@ -56,7 +56,9 @@ if (all.length > 0) {
   // برچسب‌های روی تصویر: اگر وجود دارند باید ساختارشان سالم باشد
   // (متن ناتهی + مختصات نرمال ۰..۱) — نبودنشان مشکلی نیست، اختیاری‌اند.
   const badLabels = []
+  const badFlags = []
   let labelCount = 0
+  let greenCount = 0
   for (const q of all) {
     const labels = q.labels
     if (labels === undefined || labels === null) continue
@@ -77,12 +79,22 @@ if (all.length > 0) {
         l.y >= 0 &&
         l.y <= 1
       if (!ok) badLabels.push(`${q.prompt.slice(0, 20)} → برچسب نامعتبر`)
+      // نشانهٔ «پاسخ درست» یا نیست، یا باید دقیقاً boolean باشد
+      if (l && l.correct !== undefined && typeof l.correct !== 'boolean') {
+        badFlags.push(`${q.prompt.slice(0, 20)} → correct نامعتبر`)
+      }
+      if (l && l.correct === true) greenCount += 1
     }
   }
   check(
     'برچسب‌های روی تصویر ساختار درستی دارند',
     badLabels.length === 0,
     badLabels.length ? badLabels.slice(0, 3).join(' | ') : `${labelCount} برچسب`,
+  )
+  check(
+    'نشانهٔ «پاسخ درست» روی برچسب‌ها معتبر است',
+    badFlags.length === 0,
+    badFlags.length ? badFlags.slice(0, 3).join(' | ') : `${greenCount} برچسب سبز از ${labelCount}`,
   )
 
   const choiceNoLabels = choice.filter((q) => !Array.isArray(q.labels))

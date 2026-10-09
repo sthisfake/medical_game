@@ -225,6 +225,54 @@ try {
       cleaned.question.labels[0].y === 0,
   )
 
+  // 6b-2) نشانهٔ «پاسخ درست» روی برچسب — همان برچسبی که در بازی سبز می‌شود
+  const putLabels = (labels) =>
+    json(`/api/questions/${mcq.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        stageId: stage.id,
+        prompt: 'Smoke mcq?',
+        explanation: 'e',
+        image: up.path,
+        imageWidth: 1,
+        imageHeight: 1,
+        zones: [],
+        labels,
+        type: 'mcq',
+        options: ['a', 'b', 'c', 'd'],
+        correctIndex: 2,
+      }),
+    })
+
+  const flagged = await putLabels([
+    { text: 'عضلهٔ ماسِتر', x: 0.25, y: 0.4, correct: true },
+    { text: 'فک پایین', x: 0.6, y: 0.75 },
+  ])
+  check('save labels with a correct-answer flag', flagged.ok === true)
+  const flaggedBack = await json(`/api/questions/${mcq.id}`)
+  check(
+    'correct flag round-trips on the marked label only',
+    flaggedBack.question.labels.length === 2 &&
+      flaggedBack.question.labels[0].correct === true &&
+      !('correct' in flaggedBack.question.labels[1]),
+  )
+
+  // مقدار غیربولی نباید برچسب را سبز کند
+  await putLabels([{ text: 'مشکوک', x: 0.1, y: 0.1, correct: 'yes' }])
+  const notBoolean = await json(`/api/questions/${mcq.id}`)
+  check(
+    'a non-boolean flag is dropped (label stays normal)',
+    notBoolean.question.labels.length === 1 && !('correct' in notBoolean.question.labels[0]),
+  )
+
+  // برداشتن نشانه باید کلید را کامل حذف کند (دادهٔ قدیمی دست‌نخورده بماند)
+  await putLabels([{ text: 'عضلهٔ ماسِتر', x: 0.25, y: 0.4 }])
+  const unflagged = await json(`/api/questions/${mcq.id}`)
+  check(
+    'removing the flag removes the key entirely',
+    unflagged.question.labels.length === 1 && !('correct' in unflagged.question.labels[0]),
+  )
+
   // 6c) زمان نمایش توضیح آموزشی — ذخیره، خواندن و مقدار نامعتبر
   const baseMcq = {
     stageId: stage.id,

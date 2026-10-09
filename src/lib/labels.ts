@@ -32,7 +32,11 @@ export function sanitizeLabels(input: unknown): ImageLabel[] {
     const x = norm(rec.x)
     const y = norm(rec.y)
     if (x === null || y === null) continue
-    out.push({ text: text.slice(0, MAX_LABEL_LENGTH), x, y })
+    const label: ImageLabel = { text: text.slice(0, MAX_LABEL_LENGTH), x, y }
+    /* فقط true دقیق نشانهٔ «پاسخ درست» است. برای برچسب‌های معمولی این کلید
+       نوشته نمی‌شود تا شکلِ دادهٔ قدیمی عیناً حفظ شود. */
+    if (rec.correct === true) label.correct = true
+    out.push(label)
     if (out.length >= MAX_LABELS) break
   }
   return out

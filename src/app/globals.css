@@ -967,6 +967,25 @@ a:hover {
   border-style: dashed;
 }
 
+/* برچسبِ «پاسخ درست» — با سبز از برچسب‌های دیگر جدا می‌شود (نقطه، کادر،
+   متن و خط راهنما). همان سبزی که برای پاسخ درست در بقیهٔ برنامه به کار رفته.
+   این قاعده عمداً بعد از .imglabel--on آمده تا در پنل مدیریت، برچسبِ انتخاب‌شده
+   همچنان سبز بماند و فقط حلقهٔ انتخابش دور نقطه اضافه شود. */
+.imglabel--correct .imglabel__dot {
+  background: var(--ok);
+}
+
+.imglabel--correct .imglabel__text {
+  border-color: var(--ok);
+  color: var(--ok);
+  background: #f1faf5;
+}
+
+.imglabel--correct .imglabel__text::after {
+  background: var(--ok);
+  opacity: 0.9;
+}
+
 /* ---------------- ویدیوی سؤال ---------------- */
 
 .question__video {
@@ -2008,6 +2027,35 @@ a:hover {
   color: var(--ink-3);
   font-size: 0.72rem;
   white-space: nowrap;
+}
+
+/* کلید «پاسخ درست» روی هر برچسب — روشن‌بودنش یعنی آن برچسب در بازی سبز دیده
+   می‌شود، پس همان سبز را در پنل هم می‌گیرد تا از پیش معلوم باشد. */
+.label-item__correct {
+  flex: none;
+  height: 30px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.label-item__correct:hover {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.label-item__correct--on {
+  border-color: var(--ok);
+  background: var(--ok-tint);
+  color: var(--ok);
 }
 
 .zone-item {
