@@ -23,6 +23,7 @@ interface DbStageRow {
   subtitle: string
   pass_ratio: number
   review_image: string
+  review_image_2: string
   review_text: string
   review_seconds: number
 }
@@ -80,6 +81,7 @@ function openDb(): DatabaseSync {
       subtitle   TEXT    NOT NULL DEFAULT '',
       pass_ratio REAL    NOT NULL DEFAULT 0.5,
       review_image   TEXT    NOT NULL DEFAULT '',
+      review_image_2 TEXT    NOT NULL DEFAULT '',
       review_text    TEXT    NOT NULL DEFAULT '',
       review_seconds INTEGER NOT NULL DEFAULT 120
     );
@@ -136,6 +138,9 @@ function openDb(): DatabaseSync {
   const hasStageCol = (name: string) => sCols.some((c) => c.name === name)
   if (!hasStageCol('review_image'))
     db.exec(`ALTER TABLE stages ADD COLUMN review_image TEXT NOT NULL DEFAULT ''`)
+  // تصویر دوم بازبینی — کنار تصویر اول نمایش داده می‌شود (حداکثر دو تصویر)
+  if (!hasStageCol('review_image_2'))
+    db.exec(`ALTER TABLE stages ADD COLUMN review_image_2 TEXT NOT NULL DEFAULT ''`)
   if (!hasStageCol('review_text'))
     db.exec(`ALTER TABLE stages ADD COLUMN review_text TEXT NOT NULL DEFAULT ''`)
   if (!hasStageCol('review_seconds'))
@@ -203,6 +208,7 @@ function rowToStage(row: DbStageRow): Omit<Stage, 'questions'> {
     subtitle: row.subtitle,
     passRatio: row.pass_ratio,
     reviewImage: row.review_image ?? '',
+    reviewImage2: row.review_image_2 ?? '',
     reviewText: row.review_text ?? '',
     reviewSeconds: row.review_seconds ?? DEFAULT_REVIEW_SECONDS,
   }
@@ -247,13 +253,15 @@ export function createStage(input: {
   subtitle: string
   passRatio: number
   reviewImage?: string
+  reviewImage2?: string
   reviewText?: string
   reviewSeconds?: number
 }): number {
   const res = db
     .prepare(
-      `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio, review_image, review_text, review_seconds)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio,
+         review_image, review_image_2, review_text, review_seconds)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.order,
@@ -262,6 +270,7 @@ export function createStage(input: {
       input.subtitle,
       input.passRatio,
       input.reviewImage ?? '',
+      input.reviewImage2 ?? '',
       input.reviewText ?? '',
       input.reviewSeconds ?? DEFAULT_REVIEW_SECONDS,
     )
@@ -277,6 +286,7 @@ export function updateStage(
     subtitle: string
     passRatio: number
     reviewImage?: string
+    reviewImage2?: string
     reviewText?: string
     reviewSeconds?: number
   },
@@ -284,7 +294,7 @@ export function updateStage(
   const prev = getStage(stageId)
   db.prepare(
     `UPDATE stages SET "order" = ?, icon = ?, title = ?, subtitle = ?, pass_ratio = ?,
-       review_image = ?, review_text = ?, review_seconds = ?
+       review_image = ?, review_image_2 = ?, review_text = ?, review_seconds = ?
      WHERE id = ?`,
   ).run(
     input.order,
@@ -293,26 +303,26 @@ export function updateStage(
     input.subtitle,
     input.passRatio,
     input.reviewImage ?? '',
+    input.reviewImage2 ?? '',
     input.reviewText ?? '',
     input.reviewSeconds ?? DEFAULT_REVIEW_SECONDS,
     stageId,
   )
-  // تصویر بازبینیِ قبلی اگر دیگر جایی استفاده نمی‌شود، پاک شود
-  if (prev && prev.reviewImage && prev.reviewImage !== (input.reviewImage ?? '')) {
-    deleteUploadIfUnreferenced(prev.reviewImage)
-  }
+  // تصویرهای بازبینیِ قبلی اگر دیگر جایی استفاده نمی‌شوند، پاک شوند
+  const kept = new Set([input.reviewImage ?? '', input.reviewImage2 ?? ''])
+  if (prev) deleteUnusedReviewImages([prev.reviewImage, prev.reviewImage2], kept)
 }
 
 export function deleteStage(stageId: number): void {
   const questions = db
     .prepare('SELECT image FROM questions WHERE stage_id = ?')
     .all(stageId) as unknown as { image: string }[]
-  const stageRow = db.prepare('SELECT review_image FROM stages WHERE id = ?').get(stageId) as
-    | { review_image: string }
-    | undefined
+  const stageRow = db
+    .prepare('SELECT review_image, review_image_2 FROM stages WHERE id = ?')
+    .get(stageId) as { review_image: string; review_image_2: string } | undefined
   db.prepare('DELETE FROM stages WHERE id = ?').run(stageId)
-  for (const q of questions) deleteUploadedImage(q.image)
-  if (stageRow?.review_image) deleteUploadIfUnreferenced(stageRow.review_image)
+  for (const q of questions) deleteUploadIfUnreferenced(q.image)
+  if (stageRow) deleteUnusedReviewImages([stageRow.review_image, stageRow.review_image_2])
 }
 
 export function createQuestion(input: {
@@ -376,7 +386,7 @@ export function updateQuestion(
   },
   prev: Question | null,
 ): void {
-  if (prev && prev.image !== input.image) deleteUploadedImage(prev.image)
+  if (prev && prev.image !== input.image) deleteUploadIfUnreferenced(prev.image)
   db.prepare(
     `UPDATE questions
      SET stage_id = ?, prompt = ?, explanation = ?, explanation_mode = ?, image = ?,
@@ -407,7 +417,7 @@ export function deleteQuestion(questionId: number): void {
     | undefined
   if (!row) return
   db.prepare('DELETE FROM questions WHERE id = ?').run(questionId)
-  deleteUploadedImage(row.image)
+  deleteUploadIfUnreferenced(row.image)
 }
 
 /* ------------------------------------------------------------------ */
@@ -447,8 +457,22 @@ export function deleteUploadIfUnreferenced(imagePath: string): void {
   const id = parseUploadId(imagePath)
   if (id === null) return
   const usedByQuestion = db.prepare('SELECT 1 FROM questions WHERE image = ? LIMIT 1').get(imagePath)
-  const usedByStage = db.prepare('SELECT 1 FROM stages WHERE review_image = ? LIMIT 1').get(imagePath)
+  const usedByStage = db
+    .prepare('SELECT 1 FROM stages WHERE review_image = ? OR review_image_2 = ? LIMIT 1')
+    .get(imagePath, imagePath)
   if (!usedByQuestion && !usedByStage) deleteUploadedImage(imagePath)
+}
+
+/**
+ * پاک‌کردن تصویرهای بازبینیِ کنارگذاشته‌شده. تصویری که هنوز در یکی از جای‌های
+ * همان مرحله مانده (`kept`) دست‌نخورده می‌ماند.
+ */
+export function deleteUnusedReviewImages(
+  previous: Array<string | null | undefined>,
+  kept: Set<string> = new Set(),
+): void {
+  const candidates = new Set(previous.filter((p): p is string => !!p && !kept.has(p)))
+  for (const path of candidates) deleteUploadIfUnreferenced(path)
 }
 
 export function saveUpload(dataBase64: string, contentType: string): SavedUpload {

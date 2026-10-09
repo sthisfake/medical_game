@@ -35,6 +35,7 @@ interface DbStageRow {
   subtitle: string
   pass_ratio: number
   review_image: string
+  review_image_2: string
   review_text: string
   review_seconds: number
 }
@@ -110,6 +111,7 @@ function rowToStage(row: DbStageRow): Omit<Stage, 'questions'> {
     subtitle: row.subtitle,
     passRatio: row.pass_ratio,
     reviewImage: row.review_image ?? '',
+    reviewImage2: row.review_image_2 ?? '',
     reviewText: row.review_text ?? '',
     reviewSeconds: row.review_seconds ?? DEFAULT_REVIEW_SECONDS,
   }
@@ -128,6 +130,7 @@ const DDL: string[] = [
      subtitle   TEXT    NOT NULL DEFAULT '',
      pass_ratio DOUBLE PRECISION NOT NULL DEFAULT 0.5,
      review_image   TEXT    NOT NULL DEFAULT '',
+     review_image_2 TEXT    NOT NULL DEFAULT '',
      review_text    TEXT    NOT NULL DEFAULT '',
      review_seconds INTEGER NOT NULL DEFAULT 120
    )`,
@@ -177,6 +180,8 @@ async function ensureSchema(): Promise<void> {
     // مرحله‌های موجود بازبینی ندارند، پس رفتار بازی تا وقتی ادمین چیزی
     // نگذارد هیچ تغییری نمی‌کند. هیچ سطری بازنویسی یا پاک نمی‌شود.
     `ALTER TABLE stages ADD COLUMN IF NOT EXISTS review_image TEXT NOT NULL DEFAULT ''`,
+    // تصویر دوم بازبینی — کنار تصویر اول نمایش داده می‌شود (حداکثر دو تصویر)
+    `ALTER TABLE stages ADD COLUMN IF NOT EXISTS review_image_2 TEXT NOT NULL DEFAULT ''`,
     `ALTER TABLE stages ADD COLUMN IF NOT EXISTS review_text TEXT NOT NULL DEFAULT ''`,
     `ALTER TABLE stages ADD COLUMN IF NOT EXISTS review_seconds INTEGER NOT NULL DEFAULT 120`,
   ]
@@ -300,12 +305,14 @@ export async function createStage(input: {
   subtitle: string
   passRatio: number
   reviewImage?: string
+  reviewImage2?: string
   reviewText?: string
   reviewSeconds?: number
 }): Promise<number> {
   const rows = await q<{ id: number }>(
-    `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio, review_image, review_text, review_seconds)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio,
+       review_image, review_image_2, review_text, review_seconds)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
     [
       input.order,
       input.icon,
@@ -313,6 +320,7 @@ export async function createStage(input: {
       input.subtitle,
       input.passRatio,
       input.reviewImage ?? '',
+      input.reviewImage2 ?? '',
       input.reviewText ?? '',
       input.reviewSeconds ?? DEFAULT_REVIEW_SECONDS,
     ],
@@ -329,6 +337,7 @@ export async function updateStage(
     subtitle: string
     passRatio: number
     reviewImage?: string
+    reviewImage2?: string
     reviewText?: string
     reviewSeconds?: number
   },
@@ -336,8 +345,8 @@ export async function updateStage(
   const prev = await getStage(stageId)
   await q(
     `UPDATE stages SET "order" = $1, icon = $2, title = $3, subtitle = $4, pass_ratio = $5,
-       review_image = $6, review_text = $7, review_seconds = $8
-     WHERE id = $9`,
+       review_image = $6, review_image_2 = $7, review_text = $8, review_seconds = $9
+     WHERE id = $10`,
     [
       input.order,
       input.icon,
@@ -345,29 +354,29 @@ export async function updateStage(
       input.subtitle,
       input.passRatio,
       input.reviewImage ?? '',
+      input.reviewImage2 ?? '',
       input.reviewText ?? '',
       input.reviewSeconds ?? DEFAULT_REVIEW_SECONDS,
       stageId,
     ],
   )
-  // تصویر بازبینیِ قبلی اگر دیگر جایی استفاده نمی‌شود، پاک شود
-  if (prev && prev.reviewImage && prev.reviewImage !== (input.reviewImage ?? '')) {
-    await deleteUploadIfUnreferenced(prev.reviewImage)
-  }
+  // تصویرهای بازبینیِ قبلی اگر دیگر جایی استفاده نمی‌شوند، پاک شوند
+  const kept = new Set([input.reviewImage ?? '', input.reviewImage2 ?? ''])
+  if (prev) await deleteUnusedReviewImages([prev.reviewImage, prev.reviewImage2], kept)
 }
 
 export async function deleteStage(stageId: number): Promise<void> {
   const questions = await q<{ image: string }>(`SELECT image FROM questions WHERE stage_id = $1`, [
     stageId,
   ])
-  const stageRows = await q<{ review_image: string }>(
-    `SELECT review_image FROM stages WHERE id = $1`,
+  const stageRows = await q<{ review_image: string; review_image_2: string }>(
+    `SELECT review_image, review_image_2 FROM stages WHERE id = $1`,
     [stageId],
   )
   await q(`DELETE FROM stages WHERE id = $1`, [stageId])
-  for (const question of questions) await deleteUploadedImage(question.image)
-  const reviewImage = stageRows[0]?.review_image ?? ''
-  if (reviewImage) await deleteUploadIfUnreferenced(reviewImage)
+  for (const question of questions) await deleteUploadIfUnreferenced(question.image)
+  const row = stageRows[0]
+  if (row) await deleteUnusedReviewImages([row.review_image, row.review_image_2])
 }
 
 export async function createQuestion(input: {
@@ -430,7 +439,7 @@ export async function updateQuestion(
   },
   prev: Question | null,
 ): Promise<void> {
-  if (prev && prev.image !== input.image) await deleteUploadedImage(prev.image)
+  if (prev && prev.image !== input.image) await deleteUploadIfUnreferenced(prev.image)
   await q(
     `UPDATE questions
      SET stage_id = $1, prompt = $2, explanation = $3, explanation_mode = $4, image = $5,
@@ -460,7 +469,7 @@ export async function deleteQuestion(questionId: number): Promise<void> {
   const rows = await q<{ image: string }>(`SELECT image FROM questions WHERE id = $1`, [questionId])
   if (rows.length === 0) return
   await q(`DELETE FROM questions WHERE id = $1`, [questionId])
-  await deleteUploadedImage(rows[0].image)
+  await deleteUploadIfUnreferenced(rows[0].image)
 }
 
 /* ------------------------------------------------------------------ */
@@ -501,10 +510,24 @@ async function deleteUploadIfUnreferenced(imagePath: string): Promise<void> {
     `SELECT 1 AS one FROM questions WHERE image = $1
      UNION ALL
      SELECT 1 AS one FROM stages WHERE review_image = $1
+     UNION ALL
+     SELECT 1 AS one FROM stages WHERE review_image_2 = $1
      LIMIT 1`,
     [imagePath],
   )
   if (used.length === 0) await deleteUploadedImage(imagePath)
+}
+
+/**
+ * پاک‌کردن تصویرهای بازبینیِ کنارگذاشته‌شده. تصویری که هنوز در یکی از جای‌های
+ * همان مرحله مانده (`kept`) دست‌نخورده می‌ماند.
+ */
+async function deleteUnusedReviewImages(
+  previous: Array<string | null | undefined>,
+  kept: Set<string> = new Set(),
+): Promise<void> {
+  const candidates = new Set(previous.filter((p): p is string => !!p && !kept.has(p)))
+  for (const path of candidates) await deleteUploadIfUnreferenced(path)
 }
 
 export async function saveUpload(dataBase64: string, contentType: string): Promise<SavedUpload> {

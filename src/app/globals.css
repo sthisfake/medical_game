@@ -2547,6 +2547,20 @@ a:hover {
     padding: 0.4rem;
   }
 
+  /* دو تصویر همچنان کنار هم می‌مانند، فقط کوتاه‌تر */
+  .review__figure--duo {
+    gap: 0.45rem;
+  }
+
+  .review__figure--duo .review__img {
+    max-height: min(26vh, 220px);
+    max-height: min(26dvh, 220px);
+  }
+
+  .review-admin {
+    grid-template-columns: 1fr;
+  }
+
   .review__img {
     max-height: min(42vh, 360px);
     max-height: min(42dvh, 360px);
@@ -2619,6 +2633,21 @@ a:hover {
   background: var(--bg);
 }
 
+/* دو تصویر بازبینی، کنار هم */
+.review__figure--duo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  align-items: center;
+  justify-content: initial;
+}
+
+.review__figure--duo .review__img {
+  width: 100%;
+  max-height: min(40vh, 380px);
+  max-height: min(40dvh, 380px);
+}
+
 .review__img {
   display: block;
   max-width: 100%;
@@ -2669,15 +2698,31 @@ a:hover {
 }
 
 .review-admin {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.review-admin__slot {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.45rem;
+  padding: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+
+.review-admin__slot-label {
+  color: var(--ink-2);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .review-admin__thumb {
   display: block;
   width: 100%;
-  max-width: 260px;
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
 }
@@ -2685,18 +2730,21 @@ a:hover {
 .review-admin__empty {
   display: grid;
   place-items: center;
-  min-height: 88px;
+  min-height: 84px;
   border: 1px dashed var(--line-strong);
   border-radius: var(--r-sm);
   color: var(--ink-3);
-  font-size: 0.84rem;
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 0.4rem;
 }
 
-.review-admin__actions {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  flex-wrap: wrap;
+.review-admin__remove {
+  align-self: flex-start;
+}
+
+.review-admin__hint {
+  grid-column: 1 / -1;
 }
 
 /* گوشی در حالت افقی: ارتفاع کم است، تصویر هم کوتاه‌تر می‌شود */

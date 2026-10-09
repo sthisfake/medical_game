@@ -139,10 +139,12 @@ if (all.length > 0) {
   )
 
   /* ---- بازبینی پایان مرحله (تصویر + متن + مدت زمان) ---- */
-  /* بازهٔ مجاز مثل src/lib/review.ts: بین ۵ و ۹۰۰ ثانیه. اگر نسخهٔ منتشرشده
-     هنوز این فیلد را ندارد، بررسی بی‌خطر رد می‌شود. */
+  /* بازهٔ مجاز مثل src/lib/review.ts: بین ۵ و ۹۰۰ ثانیه و حداکثر دو تصویر. اگر
+     نسخهٔ منتشرشده هنوز این فیلد را ندارد، بررسی بی‌خطر رد می‌شود. */
+  const reviewImagesOf = (st) =>
+    [st.reviewImage ?? '', st.reviewImage2 ?? ''].map((s) => s.trim()).filter((s) => s !== '')
   const withReview = stages.filter(
-    (st) => st.reviewImage || (st.reviewText ?? '').trim() !== '',
+    (st) => reviewImagesOf(st).length > 0 || (st.reviewText ?? '').trim() !== '',
   )
   const published = stages.some((st) => st.reviewSeconds !== undefined || st.reviewImage !== undefined)
   const badSeconds = stages.filter(
@@ -160,14 +162,21 @@ if (all.length > 0) {
         : 'این نسخه هنوز بازبینی ندارد',
   )
 
-  const reviewUrls = [...new Set(withReview.filter((st) => st.reviewImage).map((st) => st.reviewImage))]
+  const tooManyImages = stages.filter((st) => reviewImagesOf(st).length > 2)
+  check(
+    'هر مرحله حداکثر دو تصویر بازبینی دارد',
+    tooManyImages.length === 0,
+    tooManyImages.map((st) => st.title).join(' | ') || `${stages.length} مرحله`,
+  )
+
+  const reviewUrls = [...new Set(stages.flatMap((st) => reviewImagesOf(st)))]
   const brokenReview = []
   for (const u of reviewUrls) {
     const { status, type } = await get(u)
     if (status !== 200 || !type.startsWith('image/')) brokenReview.push(`${u} → ${status}`)
   }
   check(
-    `تصویر بازبینی مرحله‌ها در دسترس است (${reviewUrls.length})`,
+    `تصویرهای بازبینی مرحله‌ها در دسترس‌اند (${reviewUrls.length})`,
     brokenReview.length === 0,
     brokenReview.slice(0, 3).join(' | '),
   )

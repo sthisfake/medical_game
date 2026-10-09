@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { toFa } from '../lib/format'
+import { stageReviewImages } from '../lib/review'
 import type { Stage } from '../types'
 import { Button } from './ui'
 import { TimerRing } from './TimerRing'
@@ -19,6 +20,8 @@ interface StageReviewScreenProps {
  */
 export function StageReviewScreen({ stage, onDone }: StageReviewScreenProps) {
   const total = Math.max(1, Math.round(stage.reviewSeconds))
+  // تا دو تصویر، کنار هم نمایش داده می‌شوند
+  const images = stageReviewImages(stage)
   const [remaining, setRemaining] = useState(total)
   // محافظ: onDone فقط یک‌بار صدا زده شود (پایان زمان و رد کردن با هم)
   const doneRef = useRef(false)
@@ -61,14 +64,21 @@ export function StageReviewScreen({ stage, onDone }: StageReviewScreenProps) {
           <TimerRing secondsLeft={remaining} totalSeconds={total} />
         </div>
 
-        {stage.reviewImage && (
-          <figure className="review__figure">
-            <img
-              className="review__img"
-              src={stage.reviewImage}
-              alt={`تصویر بازبینی ${stage.title}`}
-              draggable={false}
-            />
+        {images.length > 0 && (
+          <figure className={`review__figure${images.length > 1 ? ' review__figure--duo' : ''}`}>
+            {images.map((src, i) => (
+              <img
+                key={`${src}-${i}`}
+                className="review__img"
+                src={src}
+                alt={
+                  images.length > 1
+                    ? `تصویر بازبینی ${toFa(i + 1)} از ${toFa(images.length)} — ${stage.title}`
+                    : `تصویر بازبینی ${stage.title}`
+                }
+                draggable={false}
+              />
+            ))}
           </figure>
         )}
 

@@ -26,6 +26,7 @@ export function parseStageInput(body: unknown): StageInput | null {
     passRatio,
     // بازبینی پایان مرحله — خالی یعنی این مرحله بازبینی ندارد
     reviewImage: typeof b.reviewImage === 'string' ? b.reviewImage.trim() : '',
+    reviewImage2: typeof b.reviewImage2 === 'string' ? b.reviewImage2.trim() : '',
     reviewText: parseReviewText(b.reviewText),
     reviewSeconds: parseReviewSeconds(b.reviewSeconds),
   }

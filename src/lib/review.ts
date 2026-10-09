@@ -13,6 +13,11 @@ export const MIN_REVIEW_SECONDS = 5
 export const MAX_REVIEW_SECONDS = 900
 /** سقف طول متن بازبینی — برای جلوگیری از ورودی‌های غیرمنتظره */
 export const MAX_REVIEW_TEXT = 4000
+/** حداکثر تعداد تصویر بازبینی — دو تصویر، کنار هم */
+export const MAX_REVIEW_IMAGES = 2
+
+/** جفت تصویرهای بازبینی، به همان ترتیبی که کنار هم نمایش داده می‌شوند */
+export type ReviewImages = Pick<Stage, 'reviewImage' | 'reviewImage2'>
 
 /**
  * ثانیهٔ معتبر برای نمایش بازبینی.
@@ -32,7 +37,18 @@ export function parseReviewText(raw: unknown): string {
   return raw.replace(/\r\n/g, '\n').trim().slice(0, MAX_REVIEW_TEXT)
 }
 
+/**
+ * تصویرهای پرشدهٔ بازبینی (۱ یا ۲ تصویر) — جای خالی حذف می‌شود تا اگر ادمین
+ * فقط تصویر دوم را گذاشته باشد هم درست نمایش داده شود.
+ */
+export function stageReviewImages(stage: Partial<ReviewImages>): string[] {
+  return [stage.reviewImage ?? '', stage.reviewImage2 ?? '']
+    .map((src) => src.trim())
+    .filter((src) => src !== '')
+    .slice(0, MAX_REVIEW_IMAGES)
+}
+
 /** آیا این مرحله بازبینی دارد؟ بدون تصویر و متن، صفحهٔ بازبینی نمایش داده نمی‌شود */
-export function stageHasReview(stage: Pick<Stage, 'reviewImage' | 'reviewText'>): boolean {
-  return Boolean(stage.reviewImage) || stage.reviewText.trim() !== ''
+export function stageHasReview(stage: Partial<ReviewImages> & Pick<Stage, 'reviewText'>): boolean {
+  return stageReviewImages(stage).length > 0 || stage.reviewText.trim() !== ''
 }

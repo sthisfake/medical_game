@@ -111,6 +111,11 @@ export interface Stage {
   passRatio: number
   /** تصویر بازبینی پایان مرحله (اختیاری) — مثل تصاویر سؤال ذخیره می‌شود */
   reviewImage: string
+  /**
+   * تصویر دوم بازبینی (اختیاری) — اگر پر باشد، هر دو تصویر کنار هم نمایش
+   * داده می‌شوند. حداکثر دو تصویر پشتیبانی می‌شود.
+   */
+  reviewImage2: string
   /** متن آموزشی بازبینی — دانشجو پس از قبولی مرحله می‌خواند */
   reviewText: string
   /** مدت نمایش بازبینی به ثانیه (پیش‌فرض ۱۲۰ = ۲ دقیقه) */
@@ -174,6 +179,7 @@ export interface StageInput {
   subtitle: string
   passRatio: number
   reviewImage: string
+  reviewImage2: string
   reviewText: string
   reviewSeconds: number
 }

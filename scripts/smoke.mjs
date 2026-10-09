@@ -86,14 +86,18 @@ try {
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
     'base64',
   )
-  const fd = new FormData()
-  fd.append('file', new Blob([png], { type: 'image/png' }), 'smoke.png')
-  const upRes = await fetch(base + '/api/upload', {
-    method: 'POST',
-    body: fd,
-    headers: { Authorization: authHeader },
-  })
-  const up = await upRes.json()
+  const uploadPng = async (fileName) => {
+    const fd = new FormData()
+    fd.append('file', new Blob([png], { type: 'image/png' }), fileName)
+    const res = await fetch(base + '/api/upload', {
+      method: 'POST',
+      body: fd,
+      headers: { Authorization: authHeader },
+    })
+    return { status: res.status, body: await res.json() }
+  }
+  const upRes = await uploadPng('smoke.png')
+  const up = upRes.body
   check('upload image', upRes.status === 200 && up.ok === true && /^\/api\/uploads\/\d+$/.test(up.path))
 
   // سرو تصویر از دیتابیس
@@ -108,13 +112,17 @@ try {
   })
   check('create stage', stage.ok === true && stage.id > 0)
 
-  // 3b) بازبینی پایان مرحله — تصویر، متن و مدت زمان
+  // 3b) بازبینی پایان مرحله — تا دو تصویر، متن و مدت زمان
   const freshStage = (await json(`/api/stages/${stage.id}`)).stage
   check(
     'a new stage has an empty review with the default time',
-    freshStage.reviewImage === '' && freshStage.reviewText === '' && freshStage.reviewSeconds === 120,
+    freshStage.reviewImage === '' &&
+      freshStage.reviewImage2 === '' &&
+      freshStage.reviewText === '' &&
+      freshStage.reviewSeconds === 120,
     JSON.stringify({
       img: freshStage.reviewImage,
+      img2: freshStage.reviewImage2,
       txt: freshStage.reviewText,
       sec: freshStage.reviewSeconds,
     }),
@@ -129,31 +137,64 @@ try {
         title: 'Smoke Test Stage',
         subtitle: '',
         passRatio: 0.5,
+        reviewImage: '',
+        reviewImage2: '',
+        reviewText: '',
+        reviewSeconds: 120,
         ...extra,
       }),
     })
 
-  await putStage({ reviewImage: up.path, reviewText: 'خط اول\nخط دوم', reviewSeconds: 45 })
+  const up2 = (await uploadPng('smoke-2.png')).body
+  // تصویر اختصاصی برای جای اول بازبینی — تا با تصویر مشترکِ سؤال‌ها قاطی نشود
+  const up3 = (await uploadPng('smoke-3.png')).body
+
+  await putStage({
+    reviewImage: up3.path,
+    reviewImage2: up2.path,
+    reviewText: 'خط اول\nخط دوم',
+    reviewSeconds: 45,
+  })
   const withReview = (await json(`/api/stages/${stage.id}`)).stage
   check(
-    'review image, text and seconds round-trip',
-    withReview.reviewImage === up.path &&
+    'both review images, text and seconds round-trip',
+    withReview.reviewImage === up3.path &&
+      withReview.reviewImage2 === up2.path &&
       withReview.reviewText === 'خط اول\nخط دوم' &&
       withReview.reviewSeconds === 45,
     JSON.stringify({
       img: withReview.reviewImage,
+      img2: withReview.reviewImage2,
       txt: withReview.reviewText,
       sec: withReview.reviewSeconds,
     }),
   )
 
+  // فقط تصویر دوم (جای اول خالی) هم باید درست بماند
+  await putStage({ reviewImage2: up2.path })
+  const onlySecond = (await json(`/api/stages/${stage.id}`)).stage
+  check(
+    'the second image can be used on its own',
+    onlySecond.reviewImage === '' && onlySecond.reviewImage2 === up2.path,
+    JSON.stringify({ img: onlySecond.reviewImage, img2: onlySecond.reviewImage2 }),
+  )
+
+  // یک تصویر (بدون جای دوم)
+  await putStage({ reviewImage: up3.path })
+  const onlyFirst = (await json(`/api/stages/${stage.id}`)).stage
+  check(
+    'a single review image still works',
+    onlyFirst.reviewImage === up3.path && onlyFirst.reviewImage2 === '',
+    JSON.stringify({ img: onlyFirst.reviewImage, img2: onlyFirst.reviewImage2 }),
+  )
+
   // مدت زمان خیلی بزرگ به سقف محدود می‌شود
-  await putStage({ reviewImage: '', reviewText: '', reviewSeconds: 99999 })
+  await putStage({ reviewSeconds: 99999 })
   const clamped = (await json(`/api/stages/${stage.id}`)).stage
   check('review seconds are clamped to the maximum', clamped.reviewSeconds === 900, `${clamped.reviewSeconds}`)
 
   // مقدار نامعتبر → مقدار پیش‌فرض
-  await putStage({ reviewImage: '', reviewText: '', reviewSeconds: 'not-a-number' })
+  await putStage({ reviewSeconds: 'not-a-number' })
   const fallback = (await json(`/api/stages/${stage.id}`)).stage
   check(
     'invalid review seconds fall back to the default',
@@ -161,8 +202,9 @@ try {
     `${fallback.reviewSeconds}`,
   )
   check(
-    'clearing the review empties image and text',
-    fallback.reviewImage === '' && fallback.reviewText === '',
+    'clearing the review empties both images and the text',
+    fallback.reviewImage === '' && fallback.reviewImage2 === '' && fallback.reviewText === '',
+    JSON.stringify({ img: fallback.reviewImage, img2: fallback.reviewImage2, txt: fallback.reviewText }),
   )
 
   // 4) ساخت سؤال با دو گزینه: یکی پاسخِ درست، یکی نادرست
@@ -390,6 +432,25 @@ try {
     vidDetail.question.type === 'video' &&
       vidDetail.question.videoUrl.includes('video.mp4') &&
       vidDetail.question.options.length === 3,
+  )
+
+  // 7b) پاک‌سازی ایمن تصویر بازبینی
+  const orphan = (await uploadPng('smoke-review-orphan.png')).body
+  await putStage({ reviewImage: orphan.path, reviewImage2: up.path })
+  // حالا هر دو جای بازبینی را خالی می‌کنیم: تصویرِ بی‌استفاده باید پاک شود، ولی
+  // تصویری که هنوز در یک سؤال استفاده می‌شود نباید پاک شود.
+  await putStage({ reviewImage: '', reviewImage2: '' })
+  const orphanGone = await fetch(base + orphan.path)
+  const stillUsed = await fetch(base + up.path)
+  check(
+    'an unused review image is cleaned up when it is removed',
+    orphanGone.status === 404,
+    `HTTP ${orphanGone.status}`,
+  )
+  check(
+    'an image still used by a question is never deleted',
+    stillUsed.status === 200,
+    `HTTP ${stillUsed.status}`,
   )
 
   // 8) حذف مرحله → حذف آبشاری سؤال و تصویرِ ذخیره‌شده در دیتابیس

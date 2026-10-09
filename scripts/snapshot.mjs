@@ -25,6 +25,7 @@ const db = new DatabaseSync(dbPath)
 const stageCols = db.prepare('PRAGMA table_info(stages)').all().map((c) => c.name)
 for (const [name, ddl] of [
   ['review_image', `ALTER TABLE stages ADD COLUMN review_image TEXT NOT NULL DEFAULT ''`],
+  ['review_image_2', `ALTER TABLE stages ADD COLUMN review_image_2 TEXT NOT NULL DEFAULT ''`],
   ['review_text', `ALTER TABLE stages ADD COLUMN review_text TEXT NOT NULL DEFAULT ''`],
   ['review_seconds', `ALTER TABLE stages ADD COLUMN review_seconds INTEGER NOT NULL DEFAULT 120`],
 ]) {
@@ -34,7 +35,7 @@ for (const [name, ddl] of [
 const stages = db
   .prepare(
     `SELECT id, "order", icon, title, subtitle, pass_ratio,
-            review_image, review_text, review_seconds
+            review_image, review_image_2, review_text, review_seconds
      FROM stages ORDER BY "order", id`,
   )
   .all()

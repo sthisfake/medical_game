@@ -1,10 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { toFa } from '../../lib/format'
 import { prepareImageForUpload } from '../../lib/image-resize'
-import { DEFAULT_REVIEW_SECONDS, MAX_REVIEW_SECONDS, MIN_REVIEW_SECONDS } from '../../lib/review'
+import {
+  DEFAULT_REVIEW_SECONDS,
+  MAX_REVIEW_IMAGES,
+  MAX_REVIEW_SECONDS,
+  MIN_REVIEW_SECONDS,
+  stageReviewImages,
+} from '../../lib/review'
 import type { Stage, StageInput } from '../../types'
 import { AdminShell } from './AdminShell'
 import { Button } from '../ui'
@@ -25,9 +31,21 @@ const emptyForm = (): StageInput => ({
   subtitle: '',
   passRatio: 0.5,
   reviewImage: '',
+  reviewImage2: '',
   reviewText: '',
   reviewSeconds: DEFAULT_REVIEW_SECONDS,
 })
+
+/** خلاصهٔ وضعیت بازبینی برای کارت مرحله */
+function reviewSummary(s: Stage): string {
+  const images = stageReviewImages(s).length
+  const hasText = (s.reviewText ?? '').trim() !== ''
+  if (images === 0 && !hasText) return 'بدون بازبینی'
+  const what = [images > 0 ? `${toFa(images)} تصویر` : '', hasText ? 'متن' : '']
+    .filter(Boolean)
+    .join(' + ')
+  return `بازبینی: ${what} • ${toFa(s.reviewSeconds ?? DEFAULT_REVIEW_SECONDS)} ثانیه`
+}
 
 /** صفحهٔ مدیریت مراحل: فهرست + ساخت/ویرایش/حذف + بازبینی پایان مرحله */
 export function StageManager() {
@@ -38,7 +56,6 @@ export function StageManager() {
   const [saving, setSaving] = useState(false)
   const [busy, setBusy] = useState(false)
   const [uploadNote, setUploadNote] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     try {
@@ -68,14 +85,14 @@ export function StageManager() {
       subtitle: s.subtitle,
       passRatio: s.passRatio,
       reviewImage: s.reviewImage ?? '',
+      reviewImage2: s.reviewImage2 ?? '',
       reviewText: s.reviewText ?? '',
       reviewSeconds: s.reviewSeconds ?? DEFAULT_REVIEW_SECONDS,
     })
   }
 
-  /** آپلود تصویر بازبینی — مثل تصویر سؤال، فشرده‌سازی در مرورگر */
-  const uploadReviewImage = async (file: File) => {
-    if (!form) return
+  /** آپلود تصویر بازبینی — جای ۱ یا ۲. مثل تصویر سؤال، فشرده‌سازی در مرورگر */
+  const uploadReviewImage = async (file: File, slot: 1 | 2) => {
     setBusy(true)
     setError('')
     setUploadNote('')
@@ -85,13 +102,19 @@ export function StageManager() {
       const fd = new FormData()
       fd.append('file', prepared.blob, prepared.fileName)
       const data = await api<UploadResponse>('/api/upload', { method: 'POST', body: fd })
-      setForm((f) => (f ? { ...f, reviewImage: data.path } : f))
+      setForm((f) =>
+        f ? (slot === 1 ? { ...f, reviewImage: data.path } : { ...f, reviewImage2: data.path }) : f,
+      )
     } catch (e) {
       setError(String(e))
     } finally {
       setBusy(false)
-      if (fileRef.current) fileRef.current.value = ''
     }
+  }
+
+  const clearReviewImage = (slot: 1 | 2) => {
+    setUploadNote('')
+    setForm((f) => (f ? (slot === 1 ? { ...f, reviewImage: '' } : { ...f, reviewImage2: '' }) : f))
   }
 
   const save = async () => {
@@ -196,8 +219,9 @@ export function StageManager() {
             <span>بازبینی پایان مرحله (اختیاری)</span>
             <p className="field__note">
               بعد از قبولیِ این مرحله، یک صفحهٔ بازبینی با تصویر و متن آموزشی نشان داده می‌شود.
-              این صفحه سؤال نیست و امتیازی ندارد. اگر هم تصویر و هم متن خالی باشند، بازبینی نمایش
-              داده نمی‌شود.
+              این صفحه سؤال نیست و امتیازی ندارد. می‌توانید تا <b>{toFa(MAX_REVIEW_IMAGES)} تصویر</b>{' '}
+              بگذارید؛ اگر هر دو تصویر پر باشند، کنار هم نمایش داده می‌شوند. اگر تصویرها و متن
+              خالی باشند، بازبینی نمایش داده نمی‌شود.
             </p>
           </div>
 
@@ -221,39 +245,47 @@ export function StageManager() {
             </small>
           </label>
 
-          <div className="field">
-            <span>تصویر بازبینی</span>
+          <div className="field field--wide">
+            <span>تصویرهای بازبینی (تا {toFa(MAX_REVIEW_IMAGES)} تصویر — کنار هم نمایش داده می‌شوند)</span>
             <div className="review-admin">
-              {form.reviewImage ? (
-                <img className="review-admin__thumb" src={form.reviewImage} alt="پیش‌نمایش تصویر بازبینی" />
-              ) : (
-                <div className="review-admin__empty">تصویری انتخاب نشده</div>
-              )}
-              <div className="review-admin__actions">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  disabled={busy}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) void uploadReviewImage(f)
-                  }}
-                />
-                {form.reviewImage && (
-                  <button
-                    type="button"
-                    className="btn-link btn-link--danger review-admin__clear"
-                    onClick={() => {
-                      setUploadNote('')
-                      setForm({ ...form, reviewImage: '' })
-                    }}
-                  >
-                    حذف تصویر
-                  </button>
-                )}
-              </div>
-              {uploadNote && <small className="field__note">{uploadNote}</small>}
+              {([1, 2] as const).map((slot) => {
+                const value = slot === 1 ? form.reviewImage : form.reviewImage2
+                return (
+                  <div key={slot} className="review-admin__slot">
+                    <span className="review-admin__slot-label">تصویر {toFa(slot)}</span>
+                    {value ? (
+                      <img
+                        className="review-admin__thumb"
+                        src={value}
+                        alt={`پیش‌نمایش تصویر ${toFa(slot)}`}
+                      />
+                    ) : (
+                      <div className="review-admin__empty">تصویری انتخاب نشده</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={busy}
+                      aria-label={`انتخاب تصویر ${toFa(slot)} بازبینی`}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        e.target.value = ''
+                        if (f) void uploadReviewImage(f, slot)
+                      }}
+                    />
+                    {value && (
+                      <button
+                        type="button"
+                        className="btn-link btn-link--danger review-admin__remove"
+                        onClick={() => clearReviewImage(slot)}
+                      >
+                        حذف تصویر {toFa(slot)}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+              {uploadNote && <small className="field__note review-admin__hint">{uploadNote}</small>}
             </div>
           </div>
 
@@ -288,9 +320,7 @@ export function StageManager() {
               <div className="stage-card__meta">
                 {toFa(s.questions.length)} سؤال • شرط قبولی حداقل {toFa(Math.round(s.passRatio * 100))}٪
                 {s.subtitle ? ` • ${s.subtitle}` : ''}
-                {s.reviewImage || s.reviewText
-                  ? ` • بازبینی: ${toFa(s.reviewSeconds ?? DEFAULT_REVIEW_SECONDS)} ثانیه`
-                  : ' • بدون بازبینی'}
+                {` • ${reviewSummary(s)}`}
               </div>
             </div>
             <div className="stage-card__actions">

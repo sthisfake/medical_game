@@ -47,6 +47,7 @@ const DDL = [
      subtitle   TEXT    NOT NULL DEFAULT '',
      pass_ratio DOUBLE PRECISION NOT NULL DEFAULT 0.5,
      review_image   TEXT    NOT NULL DEFAULT '',
+     review_image_2 TEXT    NOT NULL DEFAULT '',
      review_text    TEXT    NOT NULL DEFAULT '',
      review_seconds INTEGER NOT NULL DEFAULT 120
    )`,
@@ -136,29 +137,33 @@ try {
   }
 
   let qCount = 0
+  /** نگاشت مسیر تصویرِ فایل خروجی به رکورد آپلودِ تازه در مقصد */
+  const mapImage = (imagePath) => {
+    const m = /\/api\/uploads\/(\d+)/.exec(imagePath ?? '')
+    return m && imageMap.has(Number(m[1])) ? imageMap.get(Number(m[1])) : imagePath ?? ''
+  }
+
+  let qCount = 0
   for (const st of snap.stages ?? []) {
-    // تصویر بازبینی هم مثل تصویر سؤال به رکورد آپلودِ تازه نگاشت می‌شود
-    const rm = /\/api\/uploads\/(\d+)/.exec(st.review_image ?? '')
-    const reviewImage =
-      rm && imageMap.has(Number(rm[1])) ? imageMap.get(Number(rm[1])) : st.review_image ?? ''
     const ins = await q(
-      `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio, review_image, review_text, review_seconds)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      `INSERT INTO stages ("order", icon, title, subtitle, pass_ratio,
+         review_image, review_image_2, review_text, review_seconds)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [
         st.order,
         st.icon,
         st.title,
         st.subtitle ?? '',
         st.pass_ratio ?? 0.5,
-        reviewImage,
+        mapImage(st.review_image),
+        mapImage(st.review_image_2),
         st.review_text ?? '',
         st.review_seconds ?? 120,
       ],
     )
     const stageId = Number(ins[0].id)
     for (const qq of st.questions ?? []) {
-      const m = /\/api\/uploads\/(\d+)/.exec(qq.image ?? '')
-      const image = m && imageMap.has(Number(m[1])) ? imageMap.get(Number(m[1])) : qq.image
+      const image = mapImage(qq.image)
       // در فایل خروجی، options به‌صورت رشتهٔ JSON ذخیره شده است → دوباره کدگذاری نکن
       const optionsJson =
         typeof qq.options === 'string' ? qq.options : JSON.stringify(qq.options ?? [])
