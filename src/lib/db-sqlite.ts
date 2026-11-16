@@ -1,10 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { AnswerZone, ExplanationMode, ImageLabel, Question, Stage } from '../types'
+import type { AnswerZone, ExplanationMode, ImageLabel, ImageText, Question, Stage } from '../types'
 import { parseExplanationMode, DEFAULT_EXPLANATION_MODE } from './explanation'
 import { demoImageBytes, demoStage, demoSkeletonStages } from './seed-content'
 import { parseLabels, serializeLabels } from './labels'
+import { parseImageTexts, serializeImageTexts } from './image-texts'
 import { DEFAULT_REVIEW_SECONDS } from './review'
 
 /* ------------------------------------------------------------------ */
@@ -39,6 +40,7 @@ interface DbQuestionRow {
   image_height: number
   zones: string
   labels: string
+  image_texts: string
   type: string
   options: string
   correct_index: number
@@ -97,6 +99,7 @@ function openDb(): DatabaseSync {
       image_height  INTEGER NOT NULL DEFAULT 0,
       zones         TEXT    NOT NULL DEFAULT '[]',
       labels        TEXT    NOT NULL DEFAULT '[]',
+      image_texts   TEXT    NOT NULL DEFAULT '[]',
       type          TEXT    NOT NULL DEFAULT 'image',
       options       TEXT    NOT NULL DEFAULT '[]',
       correct_index INTEGER NOT NULL DEFAULT -1,
@@ -128,6 +131,8 @@ function openDb(): DatabaseSync {
     db.exec(`ALTER TABLE questions ADD COLUMN correct_index INTEGER NOT NULL DEFAULT -1`)
   if (!hasCol('video_url')) db.exec(`ALTER TABLE questions ADD COLUMN video_url TEXT NOT NULL DEFAULT ''`)
   if (!hasCol('labels')) db.exec(`ALTER TABLE questions ADD COLUMN labels TEXT NOT NULL DEFAULT '[]'`)
+  if (!hasCol('image_texts'))
+    db.exec(`ALTER TABLE questions ADD COLUMN image_texts TEXT NOT NULL DEFAULT '[]'`)
   if (!hasCol('explanation_mode'))
     db.exec(`ALTER TABLE questions ADD COLUMN explanation_mode TEXT NOT NULL DEFAULT 'always'`)
 
@@ -192,6 +197,7 @@ function rowToQuestion(row: DbQuestionRow): Question {
     imageHeight: row.image_height,
     zones: parseZones(row.zones),
     labels: parseLabels(row.labels),
+    imageTexts: parseImageTexts(row.image_texts),
     type: row.type === 'mcq' || row.type === 'video' ? row.type : 'image',
     options: parseOptions(row.options),
     correctIndex: Number(row.correct_index ?? -1),
@@ -335,6 +341,7 @@ export function createQuestion(input: {
   imageHeight: number
   zones: AnswerZone[]
   labels?: ImageLabel[]
+  imageTexts?: ImageText[]
   type?: Question['type']
   options?: string[]
   correctIndex?: number
@@ -345,8 +352,8 @@ export function createQuestion(input: {
     .prepare(
       `INSERT INTO questions
          (stage_id, prompt, explanation, explanation_mode, image, image_width, image_height,
-          zones, labels, type, options, correct_index, video_url, sort)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           zones, labels, image_texts, type, options, correct_index, video_url, sort)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.stageId,
@@ -358,6 +365,7 @@ export function createQuestion(input: {
       input.imageHeight,
       JSON.stringify(input.zones),
       serializeLabels(input.labels),
+      serializeImageTexts(input.imageTexts),
       input.type ?? 'image',
       JSON.stringify(input.options ?? []),
       input.correctIndex ?? -1,
@@ -379,6 +387,7 @@ export function updateQuestion(
     imageHeight: number
     zones: AnswerZone[]
     labels?: ImageLabel[]
+    imageTexts?: ImageText[]
     type?: Question['type']
     options?: string[]
     correctIndex?: number
@@ -390,9 +399,9 @@ export function updateQuestion(
   db.prepare(
     `UPDATE questions
      SET stage_id = ?, prompt = ?, explanation = ?, explanation_mode = ?, image = ?,
-         image_width = ?, image_height = ?, zones = ?, labels = ?,
-         type = ?, options = ?, correct_index = ?, video_url = ?
-     WHERE id = ?`,
+          image_width = ?, image_height = ?, zones = ?, labels = ?, image_texts = ?,
+          type = ?, options = ?, correct_index = ?, video_url = ?
+      WHERE id = ?`,
   ).run(
     input.stageId,
     input.prompt,
@@ -403,6 +412,7 @@ export function updateQuestion(
     input.imageHeight,
     JSON.stringify(input.zones),
     serializeLabels(input.labels),
+    serializeImageTexts(input.imageTexts),
     input.type ?? 'image',
     JSON.stringify(input.options ?? []),
     input.correctIndex ?? -1,

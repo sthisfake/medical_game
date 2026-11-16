@@ -8,6 +8,7 @@ import { toFa } from '../lib/format'
 import type { ActiveQuestion, Question, Stage, StageStats } from '../types'
 import { AnatomyImage } from './AnatomyImage'
 import { ImageLabels } from './ImageLabels'
+import { ImageTexts } from './ImageTexts'
 import { explanationVisible } from '../lib/explanation'
 import { ScoreBar } from './ScoreBar'
 import { TimerRing } from './TimerRing'
@@ -211,6 +212,7 @@ export function QuestionScreen({
                 onAttempt={handleAttempt}
                 locked={!open}
                 labels={question.labels ?? []}
+                imageTexts={question.imageTexts ?? []}
               />
             </div>
           )}
@@ -247,6 +249,7 @@ export function QuestionScreen({
                 <span className="imgbox__zoom" aria-hidden="true">
                   بزرگ‌نمایی
                 </span>
+                <ImageTexts texts={question.imageTexts ?? []} />
                 {/* برچسب‌های متنی — فقط بعد از پاسخ‌دادن */}
                 {!open && <ImageLabels labels={question.labels ?? []} />}
               </div>
@@ -377,6 +380,7 @@ export function QuestionScreen({
         >
           <div className="imgzoom__stage">
             <img src={question.image} alt={question.prompt} draggable={false} />
+            <ImageTexts texts={question.imageTexts ?? []} />
             {/* همان برچسب‌ها روی نمای بزرگ هم دیده می‌شوند */}
             {!open && <ImageLabels labels={question.labels ?? []} />}
           </div>

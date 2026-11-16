@@ -62,6 +62,7 @@ const DDL = [
      image_height INTEGER NOT NULL DEFAULT 0,
      zones        TEXT   NOT NULL DEFAULT '[]',
      labels       TEXT   NOT NULL DEFAULT '[]',
+     image_texts  TEXT   NOT NULL DEFAULT '[]',
      type         TEXT   NOT NULL DEFAULT 'image',
      options      TEXT   NOT NULL DEFAULT '[]',
      correct_index INTEGER NOT NULL DEFAULT -1,
@@ -90,6 +91,7 @@ try {
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS correct_index INTEGER NOT NULL DEFAULT -1`,
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT ''`,
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS labels TEXT NOT NULL DEFAULT '[]'`,
+    `ALTER TABLE questions ADD COLUMN IF NOT EXISTS image_texts TEXT NOT NULL DEFAULT '[]'`,
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS explanation_mode TEXT NOT NULL DEFAULT 'always'`,
   ]) {
     try {
@@ -136,7 +138,6 @@ try {
     imageMap.set(Number(u.id), `/api/uploads/${Number(ins[0].id)}`)
   }
 
-  let qCount = 0
   /** نگاشت مسیر تصویرِ فایل خروجی به رکورد آپلودِ تازه در مقصد */
   const mapImage = (imagePath) => {
     const m = /\/api\/uploads\/(\d+)/.exec(imagePath ?? '')
@@ -170,11 +171,13 @@ try {
       // برچسب‌ها هم همین قاعده: اگر رشته است، دست‌نخورده منتقل شود
       const labelsJson =
         typeof qq.labels === 'string' ? qq.labels : JSON.stringify(qq.labels ?? [])
+      const imageTextsJson =
+        typeof qq.image_texts === 'string' ? qq.image_texts : JSON.stringify(qq.image_texts ?? [])
       await q(
         `INSERT INTO questions
            (stage_id, prompt, explanation, explanation_mode, image, image_width, image_height,
-            zones, labels, type, options, correct_index, video_url, sort)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+             zones, labels, image_texts, type, options, correct_index, video_url, sort)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
         [
           stageId,
           qq.prompt,
@@ -186,6 +189,7 @@ try {
           qq.image_height ?? 0,
           typeof qq.zones === 'string' ? qq.zones : JSON.stringify(qq.zones ?? []),
           labelsJson,
+          imageTextsJson,
           qq.type ?? 'image',
           optionsJson,
           qq.correct_index ?? -1,

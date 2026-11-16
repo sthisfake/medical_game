@@ -32,6 +32,12 @@ for (const [name, ddl] of [
   if (!stageCols.includes(name)) db.exec(ddl)
 }
 
+// متن ثابت تصویر نیز فقط با یک ستون JSON خالی به سؤال‌های قدیمی افزوده می‌شود.
+const questionCols = db.prepare('PRAGMA table_info(questions)').all().map((c) => c.name)
+if (!questionCols.includes('image_texts')) {
+  db.exec(`ALTER TABLE questions ADD COLUMN image_texts TEXT NOT NULL DEFAULT '[]'`)
+}
+
 const stages = db
   .prepare(
     `SELECT id, "order", icon, title, subtitle, pass_ratio,
@@ -46,7 +52,7 @@ const full = stages.map((st) => ({
   questions: db
     .prepare(
       `SELECT id, stage_id, prompt, explanation, explanation_mode, image, image_width,
-              image_height, zones, labels, type, options, correct_index, video_url, sort
+              image_height, zones, labels, image_texts, type, options, correct_index, video_url, sort
        FROM questions WHERE stage_id = ? ORDER BY sort, id`,
     )
     .all(st.id),

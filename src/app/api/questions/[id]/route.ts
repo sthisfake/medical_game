@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { deleteQuestion, getQuestion, getStage, updateQuestion } from '@/lib/db'
 import { sanitizeLabels } from '@/lib/labels'
+import { sanitizeImageTexts } from '@/lib/image-texts'
 import { parseExplanationMode } from '@/lib/explanation'
 import type { QuestionInput } from '@/types'
 
@@ -8,7 +9,10 @@ export const dynamic = 'force-dynamic'
 
 type Ctx = { params: Promise<{ id: string }> }
 
-function parseQuestionInput(body: unknown): QuestionInput | null {
+function parseQuestionInput(
+  body: unknown,
+  currentImageTexts: QuestionInput['imageTexts'],
+): QuestionInput | null {
   if (!body || typeof body !== 'object') return null
   const b = body as Record<string, unknown>
   const stageId = typeof b.stageId === 'number' ? Math.round(b.stageId) : NaN
@@ -28,6 +32,11 @@ function parseQuestionInput(body: unknown): QuestionInput | null {
   const videoUrl = typeof b.videoUrl === 'string' ? b.videoUrl.trim() : ''
   // برچسب‌های روی تصویر اختیاری‌اند
   const labels = sanitizeLabels(b.labels)
+  // یک تب قدیمیِ پنل این فیلد را نمی‌فرستد؛ در آن حالت متن‌های ذخیره‌شده حفظ شوند.
+  // آرایهٔ خالیِ صریح همچنان همهٔ متن‌ها را پاک می‌کند.
+  const imageTexts = Object.prototype.hasOwnProperty.call(b, 'imageTexts')
+    ? sanitizeImageTexts(b.imageTexts)
+    : currentImageTexts
 
   if (!Number.isFinite(stageId) || !prompt) return null
   if (type === 'image' && !image) return null
@@ -38,7 +47,22 @@ function parseQuestionInput(body: unknown): QuestionInput | null {
   }
   if (type === 'video' && !videoUrl) return null
 
-  return { stageId, prompt, explanation, explanationMode, image, imageWidth, imageHeight, zones, labels, type, options, correctIndex, videoUrl }
+  return {
+    stageId,
+    prompt,
+    explanation,
+    explanationMode,
+    image,
+    imageWidth,
+    imageHeight,
+    zones,
+    labels,
+    imageTexts,
+    type,
+    options,
+    correctIndex,
+    videoUrl,
+  }
 }
 
 export async function GET(_request: Request, ctx: Ctx) {
@@ -59,7 +83,7 @@ export async function PUT(request: Request, ctx: Ctx) {
   } catch {
     return NextResponse.json({ error: 'invalid json' }, { status: 400 })
   }
-  const input = parseQuestionInput(body)
+  const input = parseQuestionInput(body, prev.imageTexts)
   if (!input) return NextResponse.json({ error: 'invalid question' }, { status: 400 })
   if (!(await getStage(input.stageId))) {
     return NextResponse.json({ error: 'stage not found' }, { status: 404 })

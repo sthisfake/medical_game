@@ -1,8 +1,9 @@
 import { neon } from '@neondatabase/serverless'
-import type { AnswerZone, ExplanationMode, ImageLabel, Question, Stage } from '../types'
+import type { AnswerZone, ExplanationMode, ImageLabel, ImageText, Question, Stage } from '../types'
 import { parseExplanationMode, DEFAULT_EXPLANATION_MODE } from './explanation'
 import { demoImageBytes, demoStage, demoSkeletonStages } from './seed-content'
 import { parseLabels, serializeLabels } from './labels'
+import { parseImageTexts, serializeImageTexts } from './image-texts'
 import { DEFAULT_REVIEW_SECONDS } from './review'
 
 /* ------------------------------------------------------------------ */
@@ -51,6 +52,7 @@ interface DbQuestionRow {
   image_height: number
   zones: string
   labels: string
+  image_texts: string
   type: string
   options: string
   correct_index: number
@@ -95,6 +97,7 @@ function rowToQuestion(row: DbQuestionRow): Question {
     imageHeight: row.image_height,
     zones: parseZones(row.zones),
     labels: parseLabels(row.labels),
+    imageTexts: parseImageTexts(row.image_texts),
     type: row.type === 'mcq' || row.type === 'video' ? row.type : 'image',
     options: parseOptions(row.options),
     correctIndex: Number(row.correct_index ?? -1),
@@ -143,9 +146,10 @@ const DDL: string[] = [
      image         TEXT   NOT NULL DEFAULT '',
      image_width   INTEGER NOT NULL DEFAULT 0,
      image_height  INTEGER NOT NULL DEFAULT 0,
-     zones         TEXT   NOT NULL DEFAULT '[]',
-     labels        TEXT   NOT NULL DEFAULT '[]',
-     type          TEXT   NOT NULL DEFAULT 'image',
+      zones         TEXT   NOT NULL DEFAULT '[]',
+      labels        TEXT   NOT NULL DEFAULT '[]',
+      image_texts   TEXT   NOT NULL DEFAULT '[]',
+      type          TEXT   NOT NULL DEFAULT 'image',
      options       TEXT   NOT NULL DEFAULT '[]',
      correct_index INTEGER NOT NULL DEFAULT -1,
      video_url     TEXT   NOT NULL DEFAULT '',
@@ -174,6 +178,8 @@ async function ensureSchema(): Promise<void> {
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT ''`,
     // برچسب‌های روی تصویر — افزودن ستون، بدون دست‌زدن به دادهٔ موجود
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS labels TEXT NOT NULL DEFAULT '[]'`,
+    // متن ثابت روی تصویر — فقط یک ستون JSON خالی به سؤال‌های موجود اضافه می‌شود
+    `ALTER TABLE questions ADD COLUMN IF NOT EXISTS image_texts TEXT NOT NULL DEFAULT '[]'`,
     // زمان نمایش توضیح آموزشی — پیش‌فرض «همیشه» = رفتار قبلی، بدون تغییر داده
     `ALTER TABLE questions ADD COLUMN IF NOT EXISTS explanation_mode TEXT NOT NULL DEFAULT 'always'`,
     // بازبینی پایان مرحله — ستون‌های تازه با مقدار پیش‌فرض خالی/۱۲۰ ثانیه.
@@ -185,13 +191,8 @@ async function ensureSchema(): Promise<void> {
     `ALTER TABLE stages ADD COLUMN IF NOT EXISTS review_text TEXT NOT NULL DEFAULT ''`,
     `ALTER TABLE stages ADD COLUMN IF NOT EXISTS review_seconds INTEGER NOT NULL DEFAULT 120`,
   ]
-  for (const alter of alters) {
-    try {
-      await q(alter)
-    } catch {
-      /* ستون از قبل وجود دارد */
-    }
-  }
+  // IF NOT EXISTS تکرار را بی‌خطر می‌کند؛ خطای واقعی migration نباید پنهان شود.
+  for (const alter of alters) await q(alter)
 }
 
 /* ------------------------------------------------------------------ */
@@ -389,6 +390,7 @@ export async function createQuestion(input: {
   imageHeight: number
   zones: AnswerZone[]
   labels?: ImageLabel[]
+  imageTexts?: ImageText[]
   type?: Question['type']
   options?: string[]
   correctIndex?: number
@@ -398,8 +400,8 @@ export async function createQuestion(input: {
   const rows = await q<{ id: number }>(
     `INSERT INTO questions
        (stage_id, prompt, explanation, explanation_mode, image, image_width, image_height,
-        zones, labels, type, options, correct_index, video_url, sort)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+         zones, labels, image_texts, type, options, correct_index, video_url, sort)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
     [
       input.stageId,
       input.prompt,
@@ -410,6 +412,7 @@ export async function createQuestion(input: {
       input.imageHeight,
       JSON.stringify(input.zones),
       serializeLabels(input.labels),
+      serializeImageTexts(input.imageTexts),
       input.type ?? 'image',
       JSON.stringify(input.options ?? []),
       input.correctIndex ?? -1,
@@ -432,6 +435,7 @@ export async function updateQuestion(
     imageHeight: number
     zones: AnswerZone[]
     labels?: ImageLabel[]
+    imageTexts?: ImageText[]
     type?: Question['type']
     options?: string[]
     correctIndex?: number
@@ -443,9 +447,9 @@ export async function updateQuestion(
   await q(
     `UPDATE questions
      SET stage_id = $1, prompt = $2, explanation = $3, explanation_mode = $4, image = $5,
-         image_width = $6, image_height = $7, zones = $8, labels = $9,
-         type = $10, options = $11, correct_index = $12, video_url = $13
-     WHERE id = $14`,
+          image_width = $6, image_height = $7, zones = $8, labels = $9,
+          image_texts = $10, type = $11, options = $12, correct_index = $13, video_url = $14
+      WHERE id = $15`,
     [
       input.stageId,
       input.prompt,
@@ -456,6 +460,7 @@ export async function updateQuestion(
       input.imageHeight,
       JSON.stringify(input.zones),
       serializeLabels(input.labels),
+      serializeImageTexts(input.imageTexts),
       input.type ?? 'image',
       JSON.stringify(input.options ?? []),
       input.correctIndex ?? -1,

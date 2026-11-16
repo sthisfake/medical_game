@@ -9,6 +9,7 @@ import type {
   AnswerZone,
   ExplanationMode,
   ImageLabel,
+  ImageText,
   Question,
   QuestionInput,
   QuestionType,
@@ -58,6 +59,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
   const [imageHeight, setImageHeight] = useState(0)
   const [zones, setZones] = useState<AnswerZone[]>([])
   const [labels, setLabels] = useState<ImageLabel[]>([])
+  const [imageTexts, setImageTexts] = useState<ImageText[]>([])
   const [options, setOptions] = useState<string[]>(['', '', '', ''])
   const [correctIndex, setCorrectIndex] = useState(-1)
   const [videoUrl, setVideoUrl] = useState('')
@@ -111,6 +113,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
         setImageHeight(question.imageHeight)
         setZones(question.zones)
         setLabels(question.labels ?? [])
+        setImageTexts(question.imageTexts ?? [])
         const opts = question.options.length > 0 ? question.options : ['', '', '', '']
         setOptions(opts.length >= 3 ? opts : [...opts, '', '', ''])
         setCorrectIndex(question.correctIndex)
@@ -216,6 +219,7 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
       imageHeight,
       zones,
       labels,
+      imageTexts,
       type,
       options: trimmedOptions,
       correctIndex,
@@ -402,6 +406,8 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
                     height={imageHeight}
                     labels={labels}
                     onLabelsChange={setLabels}
+                    imageTexts={imageTexts}
+                    onImageTextsChange={setImageTexts}
                   />
                 </div>
               ) : (
@@ -533,6 +539,8 @@ export function QuestionEditor({ questionId, initialStageId }: QuestionEditorPro
                     height={imageHeight}
                     labels={labels}
                     onLabelsChange={setLabels}
+                    imageTexts={imageTexts}
+                    onImageTextsChange={setImageTexts}
                   />
                 </div>
               )}

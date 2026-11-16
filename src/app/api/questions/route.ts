@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createQuestion, getStage } from '@/lib/db'
 import { sanitizeLabels } from '@/lib/labels'
+import { sanitizeImageTexts } from '@/lib/image-texts'
 import { parseExplanationMode } from '@/lib/explanation'
 import type { QuestionInput } from '@/types'
 
@@ -26,6 +27,8 @@ function parseQuestionInput(body: unknown): QuestionInput | null {
   const videoUrl = typeof b.videoUrl === 'string' ? b.videoUrl.trim() : ''
   // برچسب‌های روی تصویر اختیاری‌اند؛ فقط برای سؤال‌هایی که تصویر دارند معنا دارند
   const labels = sanitizeLabels(b.labels)
+  // متن ثابت جدا از برچسب است و از آغاز سؤال روی تصویر می‌ماند
+  const imageTexts = sanitizeImageTexts(b.imageTexts)
 
   if (!Number.isFinite(stageId) || !prompt) return null
   if (type === 'image' && !image) return null
@@ -36,7 +39,22 @@ function parseQuestionInput(body: unknown): QuestionInput | null {
   }
   if (type === 'video' && !videoUrl) return null
 
-  return { stageId, prompt, explanation, explanationMode, image, imageWidth, imageHeight, zones, labels, type, options, correctIndex, videoUrl }
+  return {
+    stageId,
+    prompt,
+    explanation,
+    explanationMode,
+    image,
+    imageWidth,
+    imageHeight,
+    zones,
+    labels,
+    imageTexts,
+    type,
+    options,
+    correctIndex,
+    videoUrl,
+  }
 }
 
 /** ساخت سؤال جدید */

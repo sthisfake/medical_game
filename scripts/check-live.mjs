@@ -104,6 +104,36 @@ if (all.length > 0) {
     `${choice.length - choiceNoLabels.length}/${choice.length}`,
   )
 
+  // متن‌های ثابت تصویر: مختصات نرمال و رنگ فقط سیاه/سفید است.
+  const badImageTexts = []
+  let imageTextCount = 0
+  for (const q of all) {
+    if (!Array.isArray(q.imageTexts)) {
+      badImageTexts.push(`${q.prompt.slice(0, 20)} → imageTexts آرایه نیست`)
+      continue
+    }
+    for (const item of q.imageTexts) {
+      imageTextCount += 1
+      const ok =
+        item &&
+        typeof item.text === 'string' &&
+        item.text.trim() !== '' &&
+        typeof item.x === 'number' &&
+        item.x >= 0 &&
+        item.x <= 1 &&
+        typeof item.y === 'number' &&
+        item.y >= 0 &&
+        item.y <= 1 &&
+        (item.color === 'black' || item.color === 'white')
+      if (!ok) badImageTexts.push(`${q.prompt.slice(0, 20)} → متن ثابت نامعتبر`)
+    }
+  }
+  check(
+    'متن‌های ثابت تصویر ساختار درستی دارند',
+    badImageTexts.length === 0,
+    badImageTexts.length ? badImageTexts.slice(0, 3).join(' | ') : `${imageTextCount} متن ثابت`,
+  )
+
   // زمان نمایش توضیح آموزشی: فقط «always» یا «after» معتبر است
   const badMode = all.filter((q) => q.explanationMode !== 'always' && q.explanationMode !== 'after')
   const afterCount = all.filter((q) => q.explanationMode === 'after').length

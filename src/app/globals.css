@@ -646,6 +646,7 @@ a:hover {
 
 .imgbox__zoom {
   position: absolute;
+  z-index: 6;
   bottom: 6px;
   inset-inline-start: 6px;
   padding: 0.15rem 0.6rem;
@@ -857,6 +858,82 @@ a:hover {
 
 .feedback__actions {
   margin-top: 1rem;
+}
+
+/* ---------------- متن ثابت روی تصویر ---------------- */
+/* جای متن درصدی است و اندازهٔ قلم در ImageTexts از اندازهٔ واقعی قاب محاسبه می‌شود. */
+
+.imgtexts {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+  --image-text-size: 12px;
+}
+
+.imgtext {
+  --image-text-x: -50%;
+  --image-text-y: -50%;
+  position: absolute;
+  display: block;
+  width: max-content;
+  max-width: 72%;
+  transform: translate(var(--image-text-x), var(--image-text-y));
+  font-size: var(--image-text-size);
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+}
+
+.imgtext--left {
+  --image-text-x: 0%;
+  text-align: start;
+}
+
+.imgtext--right {
+  --image-text-x: -100%;
+  text-align: end;
+}
+
+.imgtext--top {
+  --image-text-y: 0%;
+}
+
+.imgtext--bottom {
+  --image-text-y: -100%;
+}
+
+.imgtext--black {
+  color: #050505;
+  text-shadow:
+    -1px -1px 1px rgba(255, 255, 255, 0.9),
+    1px -1px 1px rgba(255, 255, 255, 0.9),
+    -1px 1px 1px rgba(255, 255, 255, 0.9),
+    1px 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.imgtext--white {
+  color: #fff;
+  text-shadow:
+    -1px -1px 1px rgba(0, 0, 0, 0.88),
+    1px -1px 1px rgba(0, 0, 0, 0.88),
+    -1px 1px 1px rgba(0, 0, 0, 0.88),
+    1px 1px 1px rgba(0, 0, 0, 0.88);
+}
+
+.imgtext--on {
+  outline: 2px dashed var(--warn);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.imgtext--empty {
+  color: var(--warn);
+  opacity: 0.85;
 }
 
 /* ---------------- برچسب‌های روی تصویر ---------------- */
@@ -2029,6 +2106,58 @@ a:hover {
   white-space: nowrap;
 }
 
+.image-text-item--on {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.image-text-item__num {
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.image-text-colors {
+  display: inline-flex;
+  gap: 0.3rem;
+  flex: none;
+}
+
+.image-text-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 30px;
+  padding: 0 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.image-text-color--on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-tint);
+}
+
+.image-text-color__swatch {
+  width: 12px;
+  height: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  border-radius: 50%;
+}
+
+.image-text-color__swatch--black {
+  background: #050505;
+}
+
+.image-text-color__swatch--white {
+  background: #fff;
+}
+
 /* کلید «پاسخ درست» روی هر برچسب — روشن‌بودنش یعنی آن برچسب در بازی سبز دیده
    می‌شود، پس همان سبز را در پنل هم می‌گیرد تا از پیش معلوم باشد. */
 .label-item__correct {
@@ -2642,8 +2771,25 @@ a:hover {
   justify-content: initial;
 }
 
+.review__image-button {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  line-height: 0;
+  cursor: zoom-in;
+}
+
+.review__figure--duo .review__image-button,
 .review__figure--duo .review__img {
   width: 100%;
+}
+
+.review__figure--duo .review__img {
   max-height: min(40vh, 380px);
   max-height: min(40dvh, 380px);
 }

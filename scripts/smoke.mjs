@@ -75,6 +75,10 @@ try {
     'existing questions default to «always» (behaviour unchanged)',
     existing.every((q) => q.explanationMode === 'always'),
   )
+  check(
+    'existing questions receive an empty/valid fixed-text list without data loss',
+    existing.every((q) => Array.isArray(q.imageTexts)),
+  )
   console.log(
     `— محتوا: ${all.stages.length} مرحله، ${existing.length} سؤال ` +
       `(mcq: ${existing.filter((q) => q.type === 'mcq').length}، ` +
@@ -262,6 +266,7 @@ try {
       mcqDetail.question.correctIndex === 2,
   )
   check('mcq carries display image', mcqDetail.question.image === up.path)
+  check('a question without fixed text defaults to an empty list', mcqDetail.question.imageTexts.length === 0)
 
   // 6b) برچسب‌های روی تصویر — ذخیره، خواندن، ویرایش و پاک‌کردن
   const withLabels = await json(`/api/questions/${mcq.id}`, {
@@ -371,6 +376,83 @@ try {
     'removing the flag removes the key entirely',
     unflagged.question.labels.length === 1 && !('correct' in unflagged.question.labels[0]),
   )
+
+  // 6b-3) متن ثابت روی تصویر — از برچسب جداست، با رنگ سیاه/سفید
+  const putImageTexts = (imageTexts) =>
+    json(`/api/questions/${mcq.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        stageId: stage.id,
+        prompt: 'Smoke mcq?',
+        explanation: 'e',
+        image: up.path,
+        imageWidth: 1,
+        imageHeight: 1,
+        zones: [],
+        labels: [],
+        imageTexts,
+        type: 'mcq',
+        options: ['a', 'b', 'c', 'd'],
+        correctIndex: 2,
+      }),
+    })
+
+  const fixedTextSaved = await putImageTexts([
+    { text: 'متن سیاه', x: 0.25, y: 0.4, color: 'black' },
+    { text: 'متن سفید', x: 0.75, y: 0.6, color: 'white' },
+  ])
+  check('save black/white fixed image text', fixedTextSaved.ok === true)
+  const fixedTextBack = await json(`/api/questions/${mcq.id}`)
+  check(
+    'fixed image text round-trips separately from reveal labels',
+    fixedTextBack.question.labels.length === 0 &&
+      fixedTextBack.question.imageTexts.length === 2 &&
+      fixedTextBack.question.imageTexts[0].color === 'black' &&
+      fixedTextBack.question.imageTexts[1].color === 'white' &&
+      fixedTextBack.question.imageTexts[1].x === 0.75,
+  )
+
+  await putImageTexts([
+    { text: '  ', x: 0.2, y: 0.2, color: 'white' },
+    { text: ' پاک‌سازی ', x: 5, y: -3, color: 'red' },
+  ])
+  const fixedTextCleaned = await json(`/api/questions/${mcq.id}`)
+  check(
+    'fixed image text is sanitized and invalid color falls back to black',
+    fixedTextCleaned.question.imageTexts.length === 1 &&
+      fixedTextCleaned.question.imageTexts[0].text === 'پاک‌سازی' &&
+      fixedTextCleaned.question.imageTexts[0].x === 1 &&
+      fixedTextCleaned.question.imageTexts[0].y === 0 &&
+      fixedTextCleaned.question.imageTexts[0].color === 'black',
+  )
+
+  // تبِ قدیمی پنل imageTexts را نمی‌فرستد؛ ذخیرهٔ فیلد دیگری نباید متن را پاک کند.
+  await json(`/api/questions/${mcq.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      stageId: stage.id,
+      prompt: 'Smoke mcq edited by old tab?',
+      explanation: 'e',
+      image: up.path,
+      imageWidth: 1,
+      imageHeight: 1,
+      zones: [],
+      labels: [],
+      type: 'mcq',
+      options: ['a', 'b', 'c', 'd'],
+      correctIndex: 2,
+    }),
+  })
+  const oldTabBack = await json(`/api/questions/${mcq.id}`)
+  check(
+    'an older client that omits imageTexts preserves stored fixed text',
+    oldTabBack.question.imageTexts.length === 1 &&
+      oldTabBack.question.imageTexts[0].text === 'پاک‌سازی',
+  )
+
+  await putImageTexts([])
+  const clearedFixedText = await json(`/api/questions/${mcq.id}`)
+  check('an explicit empty fixed-text list clears it', clearedFixedText.question.imageTexts.length === 0)
 
   // 6c) زمان نمایش توضیح آموزشی — ذخیره، خواندن و مقدار نامعتبر
   const baseMcq = {

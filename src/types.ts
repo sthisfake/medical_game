@@ -55,6 +55,20 @@ export interface ImageLabel {
   correct?: boolean
 }
 
+export type ImageTextColor = 'black' | 'white'
+
+/**
+ * متن ثابت روی تصویر — برخلاف برچسب، از همان لحظهٔ نمایش سؤال دیده می‌شود و
+ * بعد از آشکارشدن پاسخ هم باقی می‌ماند. مختصات نرمال‌اند تا جای متن با تغییر
+ * اندازهٔ تصویر ثابت بماند.
+ */
+export interface ImageText {
+  text: string
+  x: number
+  y: number
+  color: ImageTextColor
+}
+
 /** نوع سؤال */
 export type QuestionType = 'image' | 'mcq' | 'video'
 
@@ -91,6 +105,8 @@ export interface Question {
    * (درست یا نادرست) روی تصویر نمایش داده می‌شوند. برای نوع image و mcq.
    */
   labels: ImageLabel[]
+  /** متن‌های ثابت سیاه/سفید که همیشه روی تصویر دیده می‌شوند */
+  imageTexts: ImageText[]
   type: QuestionType
   /** گزینه‌های متنی (برای mcq و video) */
   options: string[]
@@ -166,6 +182,7 @@ export interface QuestionInput {
   imageHeight: number
   zones: AnswerZone[]
   labels: ImageLabel[]
+  imageTexts: ImageText[]
   type: QuestionType
   options: string[]
   correctIndex: number
