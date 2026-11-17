@@ -273,24 +273,39 @@ export function ensureReady(): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export async function listStages(): Promise<Stage[]> {
-  const stageRows = await q<DbStageRow>(`SELECT * FROM stages ORDER BY "order", id`)
-  const stages: Stage[] = []
-  for (const sr of stageRows) {
-    const qRows = await q<DbQuestionRow>(`SELECT * FROM questions WHERE stage_id = $1 ORDER BY sort, id`, [
-      sr.id,
-    ])
-    stages.push({ ...rowToStage(sr), questions: qRows.map(rowToQuestion) })
+  // یک snapshot مشترک: هنگام انتقال، هیچ سؤال موقتاً از پاسخ API گم یا دوبار دیده نمی‌شود.
+  const result = await neonSql.transaction(
+    (txn) => [
+      txn.query(`SELECT * FROM stages ORDER BY "order", id`),
+      txn.query(`SELECT * FROM questions ORDER BY stage_id, sort, id`),
+    ],
+    { isolationLevel: 'RepeatableRead', readOnly: true },
+  )
+  const [stageRows, questionRows] = result as unknown as [DbStageRow[], DbQuestionRow[]]
+  const byStage = new Map<number, Question[]>()
+  for (const row of questionRows) {
+    const stageId = Number(row.stage_id)
+    const questions = byStage.get(stageId) ?? []
+    questions.push(rowToQuestion(row))
+    byStage.set(stageId, questions)
   }
-  return stages
+  return stageRows.map((row) => ({
+    ...rowToStage(row),
+    questions: byStage.get(Number(row.id)) ?? [],
+  }))
 }
 
 export async function getStage(stageId: number): Promise<Stage | null> {
-  const rows = await q<DbStageRow>(`SELECT * FROM stages WHERE id = $1`, [stageId])
+  const result = await neonSql.transaction(
+    (txn) => [
+      txn.query(`SELECT * FROM stages WHERE id = $1`, [stageId]),
+      txn.query(`SELECT * FROM questions WHERE stage_id = $1 ORDER BY sort, id`, [stageId]),
+    ],
+    { isolationLevel: 'RepeatableRead', readOnly: true },
+  )
+  const [rows, qRows] = result as unknown as [DbStageRow[], DbQuestionRow[]]
   if (rows.length === 0) return null
   const sr = rows[0]
-  const qRows = await q<DbQuestionRow>(`SELECT * FROM questions WHERE stage_id = $1 ORDER BY sort, id`, [
-    sr.id,
-  ])
   return { ...rowToStage(sr), questions: qRows.map(rowToQuestion) }
 }
 
@@ -366,18 +381,105 @@ export async function updateStage(
   if (prev) await deleteUnusedReviewImages([prev.reviewImage, prev.reviewImage2], kept)
 }
 
-export async function deleteStage(stageId: number): Promise<void> {
-  const questions = await q<{ image: string }>(`SELECT image FROM questions WHERE stage_id = $1`, [
-    stageId,
-  ])
-  const stageRows = await q<{ review_image: string; review_image_2: string }>(
-    `SELECT review_image, review_image_2 FROM stages WHERE id = $1`,
-    [stageId],
+/**
+ * همهٔ سؤال‌های مبدأ را در یک تراکنش اتمیک به انتهای مقصد می‌برد.
+ * فقط stage_id و sort تغییر می‌کنند؛ تمام محتوای سؤال و تصویرها دست‌نخورده‌اند.
+ */
+export async function transferStageQuestions(
+  sourceStageId: number,
+  targetStageId: number,
+  expectedSourceCount: number,
+): Promise<{ moved: number; sourceQuestionCount: number; targetQuestionCount: number }> {
+  if (sourceStageId === targetStageId) {
+    return { moved: 0, sourceQuestionCount: expectedSourceCount, targetQuestionCount: 0 }
+  }
+
+  // قفل مرحله‌ها انتقال‌های هم‌زمان و حذف هم‌زمان را سری می‌کند. هر سه دستور در
+  // یک transaction واقعی Neon اجرا می‌شوند و دستور دوم snapshot تازه‌ای دارد.
+  const result = await neonSql.transaction(
+    (txn) => [
+      txn.query(
+        `SELECT id FROM stages WHERE id IN ($1, $2) ORDER BY id FOR UPDATE`,
+        [sourceStageId, targetStageId],
+      ),
+      txn.query(
+        `WITH locked_source AS MATERIALIZED (
+           SELECT id, sort
+           FROM questions
+           WHERE stage_id = $1
+           ORDER BY sort, id
+           FOR UPDATE
+         ), source_questions AS MATERIALIZED (
+           SELECT id, ROW_NUMBER() OVER (ORDER BY sort, id) AS position
+           FROM locked_source
+         ), source_total AS (
+           SELECT COUNT(*) AS count FROM source_questions
+         ), target_position AS (
+           SELECT COALESCE(MAX(sort), 0) AS max_sort
+           FROM questions
+           WHERE stage_id = $2
+         )
+         UPDATE questions AS question
+         SET stage_id = $2,
+             sort = target_position.max_sort + source_questions.position
+         FROM source_questions CROSS JOIN target_position
+         WHERE question.id = source_questions.id
+           AND question.stage_id = $1
+           AND (SELECT count FROM source_total) = $3
+           AND (SELECT COUNT(*) FROM stages WHERE id IN ($1, $2)) = 2
+         RETURNING question.id`,
+        [sourceStageId, targetStageId, expectedSourceCount],
+      ),
+      txn.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE stage_id = $1) AS source_count,
+           COUNT(*) FILTER (WHERE stage_id = $2) AS target_count
+         FROM questions
+         WHERE stage_id IN ($1, $2)`,
+        [sourceStageId, targetStageId],
+      ),
+    ],
+    { isolationLevel: 'ReadCommitted' },
   )
-  await q(`DELETE FROM stages WHERE id = $1`, [stageId])
-  for (const question of questions) await deleteUploadIfUnreferenced(question.image)
+  const [lockedStages, movedRows, counts] = result as unknown as [
+    Array<{ id: number }>,
+    Array<{ id: number }>,
+    Array<{ source_count: number; target_count: number }>,
+  ]
+  const count = counts[0]
+  return {
+    moved: lockedStages.length === 2 ? movedRows.length : 0,
+    sourceQuestionCount: Number(count?.source_count ?? 0),
+    targetQuestionCount: Number(count?.target_count ?? 0),
+  }
+}
+
+/** مرحلهٔ دارای سؤال هرگز حذف نمی‌شود؛ ابتدا باید سؤال‌ها منتقل/حذف شوند. */
+export async function deleteStage(stageId: number): Promise<boolean> {
+  const result = await neonSql.transaction(
+    (txn) => [
+      txn.query(
+        `SELECT review_image, review_image_2 FROM stages WHERE id = $1 FOR UPDATE`,
+        [stageId],
+      ),
+      txn.query(
+        `DELETE FROM stages AS stage
+         WHERE stage.id = $1
+           AND NOT EXISTS (SELECT 1 FROM questions WHERE stage_id = stage.id)
+         RETURNING stage.id`,
+        [stageId],
+      ),
+    ],
+    { isolationLevel: 'ReadCommitted' },
+  )
+  const [stageRows, deleted] = result as unknown as [
+    Array<{ review_image: string; review_image_2: string }>,
+    Array<{ id: number }>,
+  ]
+  if (deleted.length === 0) return false
   const row = stageRows[0]
   if (row) await deleteUnusedReviewImages([row.review_image, row.review_image_2])
+  return true
 }
 
 export async function createQuestion(input: {
@@ -397,29 +499,43 @@ export async function createQuestion(input: {
   videoUrl?: string
   sort?: number
 }): Promise<number> {
-  const rows = await q<{ id: number }>(
-    `INSERT INTO questions
-       (stage_id, prompt, explanation, explanation_mode, image, image_width, image_height,
-         zones, labels, image_texts, type, options, correct_index, video_url, sort)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
-    [
-      input.stageId,
-      input.prompt,
-      input.explanation,
-      input.explanationMode ?? DEFAULT_EXPLANATION_MODE,
-      input.image,
-      input.imageWidth,
-      input.imageHeight,
-      JSON.stringify(input.zones),
-      serializeLabels(input.labels),
-      serializeImageTexts(input.imageTexts),
-      input.type ?? 'image',
-      JSON.stringify(input.options ?? []),
-      input.correctIndex ?? -1,
-      input.videoUrl ?? '',
-      input.sort ?? 0,
+  const result = await neonSql.transaction(
+    (txn) => [
+      txn.query(`SELECT id FROM stages WHERE id = $1 FOR UPDATE`, [input.stageId]),
+      txn.query(
+        `INSERT INTO questions
+           (stage_id, prompt, explanation, explanation_mode, image, image_width, image_height,
+            zones, labels, image_texts, type, options, correct_index, video_url, sort)
+         VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+           COALESCE($15::integer, (
+             SELECT COALESCE(MAX(existing.sort), 0) + 1
+             FROM questions AS existing
+             WHERE existing.stage_id = $1
+           ))
+         ) RETURNING id`,
+        [
+          input.stageId,
+          input.prompt,
+          input.explanation,
+          input.explanationMode ?? DEFAULT_EXPLANATION_MODE,
+          input.image,
+          input.imageWidth,
+          input.imageHeight,
+          JSON.stringify(input.zones),
+          serializeLabels(input.labels),
+          serializeImageTexts(input.imageTexts),
+          input.type ?? 'image',
+          JSON.stringify(input.options ?? []),
+          input.correctIndex ?? -1,
+          input.videoUrl ?? '',
+          input.sort ?? null,
+        ],
+      ),
     ],
+    { isolationLevel: 'ReadCommitted' },
   )
+  const rows = result[1] as unknown as Array<{ id: number }>
   return Number(rows[0].id)
 }
 
@@ -442,32 +558,57 @@ export async function updateQuestion(
     videoUrl?: string
   },
   prev: Question | null,
-): Promise<void> {
-  if (prev && prev.image !== input.image) await deleteUploadIfUnreferenced(prev.image)
-  await q(
-    `UPDATE questions
-     SET stage_id = $1, prompt = $2, explanation = $3, explanation_mode = $4, image = $5,
-          image_width = $6, image_height = $7, zones = $8, labels = $9,
-          image_texts = $10, type = $11, options = $12, correct_index = $13, video_url = $14
-      WHERE id = $15`,
-    [
-      input.stageId,
-      input.prompt,
-      input.explanation,
-      input.explanationMode ?? DEFAULT_EXPLANATION_MODE,
-      input.image,
-      input.imageWidth,
-      input.imageHeight,
-      JSON.stringify(input.zones),
-      serializeLabels(input.labels),
-      serializeImageTexts(input.imageTexts),
-      input.type ?? 'image',
-      JSON.stringify(input.options ?? []),
-      input.correctIndex ?? -1,
-      input.videoUrl ?? '',
-      questionId,
+): Promise<boolean> {
+  const previousStageId = prev?.stageId ?? input.stageId
+  const result = await neonSql.transaction(
+    (txn) => [
+      txn.query(
+        `SELECT id FROM stages WHERE id IN ($1, $2) ORDER BY id FOR UPDATE`,
+        [previousStageId, input.stageId],
+      ),
+      txn.query(
+        `UPDATE questions AS question
+         SET stage_id = $1,
+             sort = CASE
+               WHEN question.stage_id <> $1 THEN (
+                 SELECT COALESCE(MAX(existing.sort), 0) + 1
+                 FROM questions AS existing
+                 WHERE existing.stage_id = $1
+               )
+               ELSE question.sort
+             END,
+             prompt = $2, explanation = $3, explanation_mode = $4, image = $5,
+             image_width = $6, image_height = $7, zones = $8, labels = $9,
+             image_texts = $10, type = $11, options = $12, correct_index = $13,
+             video_url = $14
+         WHERE question.id = $15 AND question.stage_id = $16
+         RETURNING question.id`,
+        [
+          input.stageId,
+          input.prompt,
+          input.explanation,
+          input.explanationMode ?? DEFAULT_EXPLANATION_MODE,
+          input.image,
+          input.imageWidth,
+          input.imageHeight,
+          JSON.stringify(input.zones),
+          serializeLabels(input.labels),
+          serializeImageTexts(input.imageTexts),
+          input.type ?? 'image',
+          JSON.stringify(input.options ?? []),
+          input.correctIndex ?? -1,
+          input.videoUrl ?? '',
+          questionId,
+          previousStageId,
+        ],
+      ),
     ],
+    { isolationLevel: 'ReadCommitted' },
   )
+  const updated = result[1] as unknown as Array<{ id: number }>
+  if (updated.length === 0) return false
+  if (prev && prev.image !== input.image) await deleteUploadIfUnreferenced(prev.image)
+  return true
 }
 
 export async function deleteQuestion(questionId: number): Promise<void> {

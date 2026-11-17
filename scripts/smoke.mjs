@@ -46,7 +46,7 @@ try {
   // 1) ساختار دادهٔ موجود (ممکن است محتوای واقعی جای دادهٔ نمونه را گرفته باشد)
   const all = await json('/api/stages')
   const stage1 = all.stages.find((s) => s.id === 1)
-  check('seeded: 4 stages', all.stages.length === 4)
+  check('database has stages', all.stages.length > 0, `${all.stages.length} stages`)
   check(
     'stage 1 has questions with zones',
     !!stage1 && stage1.questions.length > 0 && stage1.questions.some((q) => q.zones.length > 0),
@@ -516,7 +516,207 @@ try {
       vidDetail.question.options.length === 3,
   )
 
-  // 7b) پاک‌سازی ایمن تصویر بازبینی
+  // دقیقاً سناریوی تولید: ۷ سؤال مبدأ، شامل داده‌های غنی که نباید تغییر کنند.
+  await json(`/api/questions/${created.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      ...q2,
+      explanation: 'rich transfer content',
+      explanationMode: 'after',
+      labels: [{ text: 'برچسب انتقال', x: 0.2, y: 0.3, correct: true }],
+      imageTexts: [{ text: 'متن ثابت انتقال', x: 0.7, y: 0.6, color: 'white' }],
+      type: 'image',
+      options: [],
+      correctIndex: -1,
+      videoUrl: '',
+    }),
+  })
+  for (let i = 1; i <= 4; i += 1) {
+    await json('/api/questions', {
+      method: 'POST',
+      body: JSON.stringify({
+        stageId: stage.id,
+        prompt: `Source transfer question ${i}`,
+        explanation: `source-${i}`,
+        image: '',
+        imageWidth: 0,
+        imageHeight: 0,
+        zones: [],
+        type: 'mcq',
+        options: ['a', 'b', 'c'],
+        correctIndex: i % 3,
+      }),
+    })
+  }
+
+  // 7b) انتقال امن همهٔ سؤال‌های یک مرحله به مرحلهٔ دیگر
+  const targetStage = await json('/api/stages', {
+    method: 'POST',
+    body: JSON.stringify({
+      order: 10,
+      icon: 'D',
+      title: 'Smoke Transfer Destination',
+      subtitle: '',
+      passRatio: 0.5,
+    }),
+  })
+  const destinationQuestion = await json('/api/questions', {
+    method: 'POST',
+    body: JSON.stringify({
+      stageId: targetStage.id,
+      prompt: 'Destination question stays first',
+      explanation: 'destination',
+      image: '',
+      imageWidth: 0,
+      imageHeight: 0,
+      zones: [],
+      type: 'mcq',
+      options: ['a', 'b', 'c'],
+      correctIndex: 0,
+    }),
+  })
+  const destinationQuestionIds = [destinationQuestion.id]
+  for (let i = 2; i <= 3; i += 1) {
+    const extra = await json('/api/questions', {
+      method: 'POST',
+      body: JSON.stringify({
+        stageId: targetStage.id,
+        prompt: `Destination question ${i}`,
+        explanation: `destination-${i}`,
+        image: '',
+        imageWidth: 0,
+        imageHeight: 0,
+        zones: [],
+        type: 'mcq',
+        options: ['a', 'b', 'c'],
+        correctIndex: 0,
+      }),
+    })
+    destinationQuestionIds.push(extra.id)
+  }
+
+  const sourceBeforeTransfer = (await json(`/api/stages/${stage.id}`)).stage
+  const targetBeforeTransfer = (await json(`/api/stages/${targetStage.id}`)).stage
+  const sourceQuestionIds = sourceBeforeTransfer.questions.map((q) => q.id)
+  const questionContent = (q) => {
+    const { stageId: _stageId, ...content } = q
+    return content
+  }
+  check(
+    'transfer fixture matches production shape (7 into 3)',
+    sourceBeforeTransfer.questions.length === 7 && targetBeforeTransfer.questions.length === 3,
+  )
+  const richSource = sourceBeforeTransfer.questions.find((q) => q.id === created.id)
+  check(
+    'transfer fixture includes labels and fixed text',
+    richSource?.labels.length === 1 && richSource?.imageTexts.length === 1,
+  )
+
+  // محافظ حذف: مرحلهٔ دارای سؤال نباید حتی با DELETE مستقیم پاک شود.
+  const blockedDelete = await fetch(`${base}/api/stages/${stage.id}`, {
+    method: 'DELETE',
+    headers: { Authorization: authHeader },
+  })
+  check('a non-empty stage cannot be deleted', blockedDelete.status === 409, `HTTP ${blockedDelete.status}`)
+
+  const transfer = await json(`/api/stages/${stage.id}/transfer`, {
+    method: 'POST',
+    body: JSON.stringify({ targetStageId: targetStage.id }),
+  })
+  check(
+    'bulk transfer reports every moved question',
+    transfer.ok === true &&
+      transfer.moved === sourceBeforeTransfer.questions.length &&
+      transfer.targetQuestionCount === targetBeforeTransfer.questions.length + sourceBeforeTransfer.questions.length,
+  )
+
+  const sourceAfterTransfer = (await json(`/api/stages/${stage.id}`)).stage
+  const targetAfterTransfer = (await json(`/api/stages/${targetStage.id}`)).stage
+  check(
+    'source stage remains present and empty for verification',
+    sourceAfterTransfer.id === stage.id && sourceAfterTransfer.questions.length === 0,
+  )
+  check(
+    'destination questions stay first and source order is preserved',
+    targetAfterTransfer.questions
+      .slice(0, destinationQuestionIds.length)
+      .map((q) => q.id)
+      .join(',') === destinationQuestionIds.join(',') &&
+      targetAfterTransfer.questions
+        .slice(destinationQuestionIds.length)
+        .map((q) => q.id)
+        .join(',') === sourceQuestionIds.join(','),
+    targetAfterTransfer.questions.map((q) => q.id).join(','),
+  )
+  check(
+    'all transferred question IDs and content remain unchanged',
+    JSON.stringify(
+      targetAfterTransfer.questions.slice(destinationQuestionIds.length).map(questionContent),
+    ) ===
+      JSON.stringify(sourceBeforeTransfer.questions.map(questionContent)),
+  )
+  check(
+    'transfer does not change source or destination stage metadata',
+    sourceAfterTransfer.title === sourceBeforeTransfer.title &&
+      sourceAfterTransfer.reviewText === sourceBeforeTransfer.reviewText &&
+      targetAfterTransfer.title === targetBeforeTransfer.title,
+  )
+  const imageAfterTransfer = await fetch(base + up.path)
+  check('transferred question images remain available', imageAfterTransfer.status === 200)
+
+  // سؤال تازه و انتقال تک‌سؤال نیز باید بعد از هر ۱۰ سؤال ادغام‌شده قرار بگیرند.
+  const appendedQuestion = await json('/api/questions', {
+    method: 'POST',
+    body: JSON.stringify({
+      stageId: targetStage.id,
+      prompt: 'Question created after merge',
+      explanation: '',
+      image: '',
+      imageWidth: 0,
+      imageHeight: 0,
+      zones: [],
+      type: 'mcq',
+      options: ['a', 'b', 'c'],
+      correctIndex: 0,
+    }),
+  })
+  const singleMovePayload = {
+    stageId: stage.id,
+    prompt: 'Single question moved after merge',
+    explanation: '',
+    image: '',
+    imageWidth: 0,
+    imageHeight: 0,
+    zones: [],
+    type: 'mcq',
+    options: ['a', 'b', 'c'],
+    correctIndex: 0,
+  }
+  const singleMovedQuestion = await json('/api/questions', {
+    method: 'POST',
+    body: JSON.stringify(singleMovePayload),
+  })
+  await json(`/api/questions/${singleMovedQuestion.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ ...singleMovePayload, stageId: targetStage.id }),
+  })
+  const sourceAfterSingleMove = (await json(`/api/stages/${stage.id}`)).stage
+  const targetForCleanup = (await json(`/api/stages/${targetStage.id}`)).stage
+  check(
+    'new and individually moved questions append after the merged order',
+    sourceAfterSingleMove.questions.length === 0 &&
+      targetForCleanup.questions.at(-2)?.id === appendedQuestion.id &&
+      targetForCleanup.questions.at(-1)?.id === singleMovedQuestion.id,
+  )
+
+  const emptyTransfer = await fetch(`${base}/api/stages/${stage.id}/transfer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+    body: JSON.stringify({ targetStageId: targetStage.id }),
+  })
+  check('an empty source cannot be transferred again', emptyTransfer.status === 409)
+
+  // 7c) پاک‌سازی ایمن تصویر بازبینی
   const orphan = (await uploadPng('smoke-review-orphan.png')).body
   await putStage({ reviewImage: orphan.path, reviewImage2: up.path })
   // حالا هر دو جای بازبینی را خالی می‌کنیم: تصویرِ بی‌استفاده باید پاک شود، ولی
@@ -535,12 +735,28 @@ try {
     `HTTP ${stillUsed.status}`,
   )
 
-  // 8) حذف مرحله → حذف آبشاری سؤال و تصویرِ ذخیره‌شده در دیتابیس
+  // 8) فقط مرحلهٔ خالی حذف می‌شود؛ مقصد تا وقتی سؤال دارد محافظت می‌شود
   await json(`/api/stages/${stage.id}`, { method: 'DELETE' })
+  const protectedTargetDelete = await fetch(`${base}/api/stages/${targetStage.id}`, {
+    method: 'DELETE',
+    headers: { Authorization: authHeader },
+  })
+  check(
+    'destination stage stays protected while transferred questions are present',
+    protectedTargetDelete.status === 409,
+  )
+
+  for (const question of targetForCleanup.questions) {
+    await json(`/api/questions/${question.id}`, { method: 'DELETE' })
+  }
+  await json(`/api/stages/${targetStage.id}`, { method: 'DELETE' })
   const after = await json('/api/stages')
-  check('delete stage cascades', !after.stages.some((s) => s.id === stage.id))
+  check(
+    'verified empty source and destination stages can be deleted',
+    !after.stages.some((s) => s.id === stage.id || s.id === targetStage.id),
+  )
   const goneImg = await fetch(base + up.path)
-  check('uploaded image removed', goneImg.status === 404)
+  check('uploaded image is removed only after its final question is deleted', goneImg.status === 404)
   // 9) تنظیمات اطلاع‌رسانی — خواندن و نوشتن فقط با ورود مدیر
   const settingsNoAuth = await fetch(base + '/api/settings')
   check('settings GET requires auth (401)', settingsNoAuth.status === 401)

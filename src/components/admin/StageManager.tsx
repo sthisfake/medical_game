@@ -142,9 +142,13 @@ export function StageManager() {
 
   const remove = async (s: Stage) => {
     const n = s.questions.length
-    const ok = window.confirm(
-      `مرحلهٔ «${s.title}» حذف شود؟${n > 0 ? `\n${toFa(n)} سؤال داخل آن هم حذف می‌شوند.` : ''}`,
-    )
+    if (n > 0) {
+      setError(
+        `مرحلهٔ «${s.title}» هنوز ${toFa(n)} سؤال دارد. ابتدا از صفحهٔ سؤال‌ها آن‌ها را منتقل یا حذف کنید.`,
+      )
+      return
+    }
+    const ok = window.confirm(`مرحلهٔ خالیِ «${s.title}» حذف شود؟`)
     if (!ok) return
     try {
       await api(`/api/stages/${s.id}`, { method: 'DELETE' })
@@ -330,7 +334,12 @@ export function StageManager() {
               <button className="btn-link" onClick={() => openEdit(s)}>
                 ویرایش
               </button>
-              <button className="btn-link btn-link--danger" onClick={() => remove(s)}>
+              <button
+                className="btn-link btn-link--danger"
+                disabled={s.questions.length > 0}
+                title={s.questions.length > 0 ? 'برای حذف، ابتدا سؤال‌ها را منتقل یا حذف کنید' : undefined}
+                onClick={() => remove(s)}
+              >
                 حذف
               </button>
             </div>

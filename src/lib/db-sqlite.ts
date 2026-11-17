@@ -319,16 +319,80 @@ export function updateStage(
   if (prev) deleteUnusedReviewImages([prev.reviewImage, prev.reviewImage2], kept)
 }
 
-export function deleteStage(stageId: number): void {
-  const questions = db
-    .prepare('SELECT image FROM questions WHERE stage_id = ?')
-    .all(stageId) as unknown as { image: string }[]
+/**
+ * انتقال در یک تراکنش انجام می‌شود؛ مقصد قبلی جلو می‌ماند و ترتیب مبدأ حفظ می‌شود.
+ * هیچ ستون محتوایی یا رکورد آپلودی تغییر نمی‌کند.
+ */
+export function transferStageQuestions(
+  sourceStageId: number,
+  targetStageId: number,
+  expectedSourceCount: number,
+): { moved: number; sourceQuestionCount: number; targetQuestionCount: number } {
+  if (sourceStageId === targetStageId) {
+    return { moved: 0, sourceQuestionCount: expectedSourceCount, targetQuestionCount: 0 }
+  }
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const stageCount = db
+      .prepare('SELECT COUNT(*) AS count FROM stages WHERE id IN (?, ?)')
+      .get(sourceStageId, targetStageId) as unknown as { count: number }
+    const source = db
+      .prepare('SELECT id FROM questions WHERE stage_id = ? ORDER BY sort, id')
+      .all(sourceStageId) as unknown as { id: number }[]
+    const target = db
+      .prepare('SELECT COALESCE(MAX(sort), 0) AS max_sort FROM questions WHERE stage_id = ?')
+      .get(targetStageId) as unknown as { max_sort: number }
+    if (Number(stageCount.count) !== 2 || source.length !== expectedSourceCount) {
+      const targetCount = db
+        .prepare('SELECT COUNT(*) AS count FROM questions WHERE stage_id = ?')
+        .get(targetStageId) as unknown as { count: number }
+      db.exec('COMMIT')
+      return {
+        moved: 0,
+        sourceQuestionCount: source.length,
+        targetQuestionCount: Number(targetCount.count),
+      }
+    }
+    const update = db.prepare(
+      'UPDATE questions SET stage_id = ?, sort = ? WHERE id = ? AND stage_id = ?',
+    )
+    source.forEach((question, index) => {
+      const result = update.run(targetStageId, target.max_sort + index + 1, question.id, sourceStageId)
+      if (Number(result.changes) !== 1) throw new Error('question transfer conflict')
+    })
+    const targetCount = db
+      .prepare('SELECT COUNT(*) AS count FROM questions WHERE stage_id = ?')
+      .get(targetStageId) as unknown as { count: number }
+    db.exec('COMMIT')
+    return {
+      moved: source.length,
+      sourceQuestionCount: 0,
+      targetQuestionCount: Number(targetCount.count),
+    }
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK')
+    } catch {
+      /* ignore rollback failure */
+    }
+    throw error
+  }
+}
+
+/** مرحلهٔ دارای سؤال هرگز حذف نمی‌شود؛ ابتدا باید سؤال‌ها منتقل/حذف شوند. */
+export function deleteStage(stageId: number): boolean {
   const stageRow = db
     .prepare('SELECT review_image, review_image_2 FROM stages WHERE id = ?')
     .get(stageId) as { review_image: string; review_image_2: string } | undefined
-  db.prepare('DELETE FROM stages WHERE id = ?').run(stageId)
-  for (const q of questions) deleteUploadIfUnreferenced(q.image)
+  const result = db
+    .prepare(
+      `DELETE FROM stages
+       WHERE id = ? AND NOT EXISTS (SELECT 1 FROM questions WHERE stage_id = ?)`,
+    )
+    .run(stageId, stageId)
+  if (Number(result.changes) === 0) return false
   if (stageRow) deleteUnusedReviewImages([stageRow.review_image, stageRow.review_image_2])
+  return true
 }
 
 export function createQuestion(input: {
@@ -353,7 +417,10 @@ export function createQuestion(input: {
       `INSERT INTO questions
          (stage_id, prompt, explanation, explanation_mode, image, image_width, image_height,
            zones, labels, image_texts, type, options, correct_index, video_url, sort)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          COALESCE(?, (SELECT COALESCE(MAX(sort), 0) + 1 FROM questions WHERE stage_id = ?))
+        )`,
     )
     .run(
       input.stageId,
@@ -370,7 +437,8 @@ export function createQuestion(input: {
       JSON.stringify(input.options ?? []),
       input.correctIndex ?? -1,
       input.videoUrl ?? '',
-      input.sort ?? 0,
+      input.sort ?? null,
+      input.stageId,
     )
   return Number(res.lastInsertRowid)
 }
@@ -394,15 +462,25 @@ export function updateQuestion(
     videoUrl?: string
   },
   prev: Question | null,
-): void {
-  if (prev && prev.image !== input.image) deleteUploadIfUnreferenced(prev.image)
-  db.prepare(
+): boolean {
+  const previousStageId = prev?.stageId ?? input.stageId
+  const result = db.prepare(
     `UPDATE questions
-     SET stage_id = ?, prompt = ?, explanation = ?, explanation_mode = ?, image = ?,
+     SET sort = CASE
+           WHEN stage_id <> ? THEN (
+             SELECT COALESCE(MAX(existing.sort), 0) + 1
+             FROM questions AS existing
+             WHERE existing.stage_id = ?
+           )
+           ELSE sort
+         END,
+         stage_id = ?, prompt = ?, explanation = ?, explanation_mode = ?, image = ?,
           image_width = ?, image_height = ?, zones = ?, labels = ?, image_texts = ?,
           type = ?, options = ?, correct_index = ?, video_url = ?
-      WHERE id = ?`,
+       WHERE id = ? AND stage_id = ?`,
   ).run(
+    input.stageId,
+    input.stageId,
     input.stageId,
     input.prompt,
     input.explanation,
@@ -418,7 +496,11 @@ export function updateQuestion(
     input.correctIndex ?? -1,
     input.videoUrl ?? '',
     questionId,
+    previousStageId,
   )
+  if (Number(result.changes) === 0) return false
+  if (prev && prev.image !== input.image) deleteUploadIfUnreferenced(prev.image)
+  return true
 }
 
 export function deleteQuestion(questionId: number): void {

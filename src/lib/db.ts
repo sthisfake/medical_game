@@ -22,6 +22,12 @@ export interface SavedUpload extends StoredUpload {
   path: string
 }
 
+export interface StageQuestionTransferResult {
+  moved: number
+  sourceQuestionCount: number
+  targetQuestionCount: number
+}
+
 interface Backend {
   ensureReady?(): Promise<void>
   listStages(): Promise<Stage[]>
@@ -29,13 +35,18 @@ interface Backend {
   getQuestion(questionId: number): Promise<Question | null>
   createStage(input: StageInput): Promise<number>
   updateStage(stageId: number, input: StageInput): Promise<void>
-  deleteStage(stageId: number): Promise<void>
+  deleteStage(stageId: number): Promise<boolean>
+  transferStageQuestions(
+    sourceStageId: number,
+    targetStageId: number,
+    expectedSourceCount: number,
+  ): Promise<StageQuestionTransferResult>
   createQuestion(input: QuestionInput): Promise<number>
   updateQuestion(
     questionId: number,
     input: QuestionInput,
     prev: Question | null,
-  ): Promise<void>
+  ): Promise<boolean>
   deleteQuestion(questionId: number): Promise<void>
   saveUpload(dataBase64: string, contentType: string): Promise<SavedUpload>
   getUpload(uploadId: number): Promise<StoredUpload | null>
@@ -85,8 +96,17 @@ export async function updateStage(stageId: number, input: StageInput): Promise<v
   return (await impl()).updateStage(stageId, input)
 }
 
-export async function deleteStage(stageId: number): Promise<void> {
+export async function deleteStage(stageId: number): Promise<boolean> {
   return (await impl()).deleteStage(stageId)
+}
+
+/** انتقال اتمیک همهٔ سؤال‌ها؛ سؤال‌های فعلی مقصد جلوتر باقی می‌مانند. */
+export async function transferStageQuestions(
+  sourceStageId: number,
+  targetStageId: number,
+  expectedSourceCount: number,
+): Promise<StageQuestionTransferResult> {
+  return (await impl()).transferStageQuestions(sourceStageId, targetStageId, expectedSourceCount)
 }
 
 export async function createQuestion(input: QuestionInput): Promise<number> {
@@ -97,7 +117,7 @@ export async function updateQuestion(
   questionId: number,
   input: QuestionInput,
   prev: Question | null,
-): Promise<void> {
+): Promise<boolean> {
   return (await impl()).updateQuestion(questionId, input, prev)
 }
 

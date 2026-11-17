@@ -211,6 +211,12 @@ a:hover {
   text-decoration: underline;
 }
 
+.btn-link:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
 .btn-link--danger {
   color: var(--bad);
 }
@@ -1499,6 +1505,18 @@ a:hover {
   font-size: 0.9rem;
 }
 
+.admin-alert--success {
+  background: var(--ok-tint);
+  border-color: rgba(30, 122, 77, 0.25);
+  color: #145c38;
+}
+
+.admin-alert--success a {
+  color: #145c38;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
 .admin-toolbar {
   display: flex;
   gap: 0.75rem;
@@ -1520,6 +1538,52 @@ a:hover {
   text-align: center;
   padding: 1.5rem 0;
   font-size: 0.9rem;
+}
+
+.stage-transfer {
+  border-inline-start: 4px solid var(--accent);
+}
+
+.stage-transfer__title {
+  margin-bottom: 0.3rem;
+  color: var(--accent-deep);
+  font-size: 1rem;
+}
+
+.stage-transfer__text,
+.stage-transfer__warning {
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  line-height: 2;
+}
+
+.stage-transfer__warning {
+  margin-top: 0.25rem;
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.stage-transfer__controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.stage-transfer__select {
+  flex: 1 1 300px;
+}
+
+.stage-transfer__controls .btn {
+  flex: 0 0 auto;
+}
+
+.stage-transfer__single {
+  display: block;
+  margin-top: 0.65rem;
+  color: var(--ink-3);
+  font-size: 0.76rem;
 }
 
 .admin-placeholder {

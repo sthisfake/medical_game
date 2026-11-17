@@ -34,9 +34,22 @@ export async function PUT(request: Request, ctx: Ctx) {
 
 export async function DELETE(_request: Request, ctx: Ctx) {
   const { id } = await ctx.params
-  if (!(await getStage(Number(id)))) {
+  const stage = await getStage(Number(id))
+  if (!stage) {
     return NextResponse.json({ error: 'not found' }, { status: 404 })
   }
-  await deleteStage(Number(id))
+  if (stage.questions.length > 0) {
+    return NextResponse.json(
+      { error: 'برای حذف مرحله، ابتدا سؤال‌های آن را منتقل یا حذف کنید.' },
+      { status: 409 },
+    )
+  }
+  const deleted = await deleteStage(Number(id))
+  if (!deleted) {
+    return NextResponse.json(
+      { error: 'مرحله هم‌زمان تغییر کرد؛ صفحه را تازه‌سازی و دوباره بررسی کنید.' },
+      { status: 409 },
+    )
+  }
   return NextResponse.json({ ok: true })
 }

@@ -89,7 +89,13 @@ export async function PUT(request: Request, ctx: Ctx) {
     return NextResponse.json({ error: 'stage not found' }, { status: 404 })
   }
 
-  await updateQuestion(Number(id), input, prev)
+  const updated = await updateQuestion(Number(id), input, prev)
+  if (!updated) {
+    return NextResponse.json(
+      { error: 'question changed while editing; reload and try again' },
+      { status: 409 },
+    )
+  }
   return NextResponse.json({ ok: true })
 }
 
